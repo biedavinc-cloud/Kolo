@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 14% 96%;
+    --foreground: 210 4% 13%;
+    --surface: 0 0% 100%;
+    --card: 0 0% 100%;
+    --card-foreground: 210 4% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 4% 13%;
+    --primary: 165 100% 25%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 8% 94%;
+    --secondary-foreground: 210 4% 13%;
+    --muted: 220 8% 94%;
+    --muted-foreground: 210 4% 44%;
+    --accent: 165 100% 96%;
+    --accent-foreground: 165 100% 21%;
+    --destructive: 7 89% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 8% 89%;
+    --input: 220 8% 89%;
+    --ring: 165 100% 25%;
+    --income: 143 79% 29%;
+    --income-soft: 143 79% 95%;
+    --expense: 7 89% 45%;
+    --expense-soft: 7 89% 95%;
+    --warning: 22 92% 37%;
+    --warning-soft: 22 92% 94%;
+    --radius: 0.5rem;
+    --font-heading: "Poppins", ui-sans-serif, system-ui, sans-serif;
+    --font-body: "Poppins", ui-sans-serif, system-ui, sans-serif;
+    --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  .dark {
+    --background: 220 12% 5%;
+    --foreground: 220 5% 90%;
+    --surface: 217 14% 8%;
+    --card: 217 14% 8%;
+    --card-foreground: 220 5% 90%;
+    --popover: 217 14% 8%;
+    --popover-foreground: 220 5% 90%;
+    --primary: 163 100% 33%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 213 12% 15%;
+    --secondary-foreground: 220 5% 90%;
+    --muted: 213 12% 15%;
+    --muted-foreground: 210 5% 57%;
+    --accent: 163 60% 14%;
+    --accent-foreground: 163 100% 60%;
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 213 12% 15%;
+    --input: 213 12% 15%;
+    --ring: 163 100% 33%;
+    --income: 142 71% 45%;
+    --income-soft: 142 71% 14%;
+    --expense: 0 85% 60%;
+    --expense-soft: 0 60% 16%;
+    --warning: 35 90% 55%;
+    --warning-soft: 35 60% 16%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-feature-settings: "cv02", "cv03", "cv04";
+  }
+}
+
+@layer utilities {
+  .font-mono-nums {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  .surface {
+    background-color: hsl(var(--surface));
+  }
+}
