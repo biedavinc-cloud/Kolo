@@ -35,15 +35,29 @@ miscRouter.get('/exchange-rates', async (_req, res) => {
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+// N'accepte que des types de fichiers sûrs pour des reçus/avatars — empêche
+// l'upload de HTML/SVG/scripts qui pourraient être servis et exécutés depuis
+// /uploads (XSS stocké).
+const ALLOWED_UPLOAD_MIME = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+  'application/pdf': '.pdf',
+};
+
 miscRouter.post('/uploads', requireAuth, async (req, res) => {
-  const { filename, data_url } = req.body || {};
+  const { data_url } = req.body || {};
   if (!data_url || !data_url.startsWith('data:')) {
     return res.status(400).json({ error: 'data_url (base64) requis' });
   }
   try {
     const [, meta, b64] = data_url.match(/^data:(.+);base64,(.+)$/) || [];
-    if (!b64) return res.status(400).json({ error: 'data_url invalide' });
-    const ext = (filename && path.extname(filename)) || `.${(meta.split('/')[1] || 'bin').split('+')[0]}`;
+    const mime = (meta || '').split(';')[0];
+    const ext = ALLOWED_UPLOAD_MIME[mime];
+    if (!b64 || !ext) {
+      return res.status(400).json({ error: 'Type de fichier non autorisé (image ou PDF uniquement)' });
+    }
     const safeName = `${crypto.randomUUID()}${ext}`;
     fs.writeFileSync(path.join(UPLOAD_DIR, safeName), Buffer.from(b64, 'base64'));
     const base = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 8787}`;

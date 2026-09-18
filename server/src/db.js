@@ -11,7 +11,18 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
+});
+
+pool.on('error', (err) => {
+  // Une erreur sur une connexion inactive du pool ne doit pas faire planter
+  // le process — sans ce handler, EventEmitter la relance en exception fatale.
+  console.error('[db pool error]', err.message);
+});
 
 export async function query(text, params) {
   const result = await pool.query(text, params);

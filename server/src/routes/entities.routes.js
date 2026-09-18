@@ -9,7 +9,11 @@ entitiesRouter.use(requireAuth);
 function getConfig(req, res, next) {
   const cfg = ENTITIES[req.params.entity];
   if (!cfg) return res.status(404).json({ error: `Entité inconnue : ${req.params.entity}` });
-  if (cfg.superAdminOnly && !req.user.is_super_admin) {
+  const isWrite = req.method !== 'GET';
+  // Les entités superAdminOnly sont bloquées pour tout non-admin (lecture + écriture).
+  // Les entités publicRead (ex: Announcement) sont en lecture libre mais l'écriture
+  // reste réservée aux super admins.
+  if ((cfg.superAdminOnly || (cfg.publicRead && isWrite)) && !req.user.is_super_admin) {
     return res.status(403).json({ error: 'Réservé aux super administrateurs' });
   }
   req.entityConfig = cfg;

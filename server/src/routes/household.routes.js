@@ -39,7 +39,10 @@ householdRouter.post('/', async (req, res) => {
 // PUT /api/household -> met à jour le foyer courant
 householdRouter.put('/', async (req, res) => {
   if (!req.user.household_id) return res.status(403).json({ error: 'Aucun foyer associé' });
-  const allowed = ['name', 'currency', 'suspended'];
+  // 'suspended' n'est PAS modifiable ici : c'est un levier plateforme réservé aux
+  // super admins, voir POST /api/superadmin/households/:id/suspend. Sinon un membre
+  // du foyer pourrait s'auto-lever une suspension imposée par la plateforme.
+  const allowed = ['name', 'currency'];
   const sets = [];
   const values = [];
   let i = 1;

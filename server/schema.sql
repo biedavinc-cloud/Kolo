@@ -32,8 +32,15 @@ create table if not exists users (
   updated_at    timestamptz not null default now()
 );
 
-alter table households
-  add constraint households_created_by_fk foreign key (created_by_id) references users(id) on delete set null;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'households_created_by_fk'
+  ) then
+    alter table households
+      add constraint households_created_by_fk foreign key (created_by_id) references users(id) on delete set null;
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Comptes
