@@ -1,64 +1,79 @@
-const db = globalThis.__B44_DB__ || { auth:{ isAuthenticated: async()=>false, me: async()=>null }, entities:new Proxy({}, { get:()=>({ filter:async()=>[], get:async()=>null, create:async()=>({}), update:async()=>({}), delete:async()=>({}) }) }), integrations:{ Core:{ UploadFile:async()=>({ file_url:'' }) } } };
+# Kolo
 
-# Base44 Project
+Application de gestion budgétaire familiale. Frontend React/Vite + backend Express
+connecté à une base Postgres [Neon](https://neon.tech).
 
-Use this repository to run and edit the app locally, then publish changes back through db.
+> Ce dépôt utilisait auparavant Base44 comme backend hébergé. Cette dépendance a été
+> retirée : toute la logique métier vit maintenant dans `server/` (Express + Neon).
+> L'ancien export Base44 (schémas d'entités, fonctions serverless) est conservé pour
+> référence dans `server/legacy-base44/` mais n'est plus exécuté.
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+## Structure
 
-## Prerequisites
-
-1. Clone the repository using the project's Git URL.
-2. Navigate to the project directory.
-3. Install dependencies: `npm install`.
-4. Install the Base44 CLI: `npm install -g base44@latest`.
-5. Install [Deno](https://docs.deno.com/runtime/getting_started/installation/) — the local Base44 backend runs on it.
-
-Run `base44 --help` (or see the [CLI reference](https://docs.db.com/developers/references/cli/commands/introduction)) for the full command surface.
-
-## Run Locally
-
-Three commands, from the project root:
-
-```bash
-base44 login   # one-time per machine
-base44 link    # one-time per clone
-base44 dev     # local backend + frontend together
+```
+src/            Frontend React (Vite) — pages, composants, hooks
+server/         Backend Express — routes API, auth JWT, accès Neon
+server/schema.sql   Schéma Postgres à appliquer sur votre base Neon
+server/legacy-base44/   Ancien export Base44 (référence uniquement)
 ```
 
-Open the frontend URL that `base44 dev` prints (typically `http://localhost:5173`).
+## Développement local
 
-Notes:
+### 1. Base de données (Neon)
 
-- **Every fresh clone needs `base44 link`.** It writes `base44/.app.jsonc` (the app-id pointer), which is deliberately gitignored. Your app id is in the Builder URL (`app.db.com/apps/<id>/...`); `base44 link --help` shows the non-interactive flags.
-- **`base44 dev` runs the frontend for you** (via `site.serveCommand` in this repo's `base44/config.jsonc`) — never run `npm run dev` yourself: alone it serves a UI with no backend behind it (`[base44] Proxy not enabled`, every `/api` call fails), and alongside `base44 dev` the second Vite silently takes the next port and you end up looking at the wrong one.
-- **The app must be published at least once for the UI to load under `base44 dev`.** The frontend boots by fetching app settings from the hosted app; before the first publish that fails and every page redirects to login. The local API works regardless.
-- Entities, functions, and auth run locally — entity data is **in-memory only**, wiped when `base44 dev` restarts. Everything else (Core integrations, OAuth login) is forwarded to your deployed app. Full breakdown: [Local development overview](https://docs.db.com/developers/backend/overview/local-dev/local-development-overview).
+1. Créez un projet sur [console.neon.tech](https://console.neon.tech).
+2. Copiez la "pooled connection string".
+3. `cd server && cp .env.example .env`, puis renseignez `DATABASE_URL` (et
+   `JWT_SECRET` — générez-en un avec
+   `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`).
+4. Appliquez le schéma :
+   ```bash
+   cd server
+   npm install
+   npm run migrate
+   ```
 
-## Frontend Only, Hosted Backend
-
-To work on just the frontend against your app's live hosted backend:
-
-```bash
-base44 dev --remote
-```
-
-⚠️ In this mode writes go to your app's **production data** — plain `base44 dev` keeps everything local.
-
-## Publish Your Changes
-
-After pushing your changes to git, open the Base44 dashboard and publish the app:
+### 2. Backend
 
 ```bash
-base44 dashboard open
+cd server
+npm run dev    # http://localhost:8787
 ```
 
-This repo syncs to Base44 through git, so publish from the dashboard rather than `base44 deploy` — a CLI deploy ships your local tree directly, bypassing the sync, and the deployed state silently diverges from the repo.
+### 3. Frontend
 
-## Docs & Support
+```bash
+npm install
+npm run dev    # http://localhost:5173, proxy /api -> localhost:8787
+```
 
-GitHub integration: [https://docs.db.com/developers/app-code/local-development/github](https://docs.db.com/developers/app-code/local-development/github)
+## Déploiement sur Cloudflare
 
-Local development: [https://docs.db.com/developers/backend/overview/local-dev/local-development-overview](https://docs.db.com/developers/backend/overview/local-dev/local-development-overview)
+⚠️ **Important : seul le frontend peut être déployé tel quel sur Cloudflare Pages.**
+Le backend (`server/`) est un serveur Express classique (`app.listen`, WebSocket pour
+Neon, webhook Stripe brut, JWT) : ce n'est **pas** compatible avec le runtime Workers
+de Cloudflare Pages Functions sans réécriture significative. Pour l'instant, hébergez
+`server/` sur une plateforme Node.js classique (Railway, Render, Fly.io, un VPS...),
+et pointez le frontend dessus.
 
-Support: [https://app.db.com/support](https://app.db.com/support)
+### Frontend → Cloudflare Pages
+
+- **Build command** : `npm run build`
+- **Build output directory** : `dist`
+- **Variable d'environnement** : `VITE_API_URL` = l'URL publique de votre backend
+  (ex. `https://api.kolo.example.com`)
+- Le fichier `public/_redirects` (`/* /index.html 200`) est déjà en place pour que
+  le routage côté client (React Router) fonctionne sur Cloudflare Pages.
+
+### Backend → hébergeur Node
+
+- Déployez le contenu de `server/` avec les variables de `server/.env.example`
+  renseignées (dont `DATABASE_URL` Neon, `JWT_SECRET`, `FRONTEND_URL` pointant vers
+  votre domaine Cloudflare Pages pour CORS).
+- `npm run migrate` une fois pour appliquer `schema.sql` sur la base Neon de
+  production.
+
+Si vous voulez plus tard porter `server/` sur Cloudflare Workers directement
+(le driver `@neondatabase/serverless` est compatible Workers), il faudra remplacer
+Express par un routeur compatible Workers (Hono, itty-router...) — dites-le moi si
+vous voulez que je m'en occupe.
