@@ -2,6 +2,8 @@ const db = globalThis.__B44_DB__ || { auth:{ isAuthenticated: async()=>false, me
 
 # Base44 Project
 
+**Stack:** backend on Neon, frontend hosted on Cloudflare.
+
 Use this repository to run and edit the app locally, then publish changes back through db.
 
 Any change pushed to the repo will also be reflected in the Base44 Builder.
