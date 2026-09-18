@@ -1,0 +1,54 @@
+{
+  "name": "Account",
+  "type": "object",
+  "properties": {
+    "household_id": {
+      "type": "string",
+      "title": "Foyer"
+    },
+    "name": {
+      "type": "string",
+      "title": "Nom du compte"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "checking",
+        "savings",
+        "cash",
+        "credit"
+      ],
+      "default": "checking",
+      "title": "Type"
+    },
+    "balance": {
+      "type": "number",
+      "default": 0,
+      "title": "Solde initial"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR",
+      "title": "Devise"
+    }
+  },
+  "required": [
+    "household_id",
+    "name",
+    "type"
+  ],
+  "rls": {
+    "read": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "create": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "update": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "delete": {
+      "data.household_id": "{{user.data.household_id}}"
+    }
+  }
+}

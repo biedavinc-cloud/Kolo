@@ -1,0 +1,52 @@
+{
+  "name": "Category",
+  "type": "object",
+  "properties": {
+    "household_id": {
+      "type": "string",
+      "title": "Foyer"
+    },
+    "name": {
+      "type": "string",
+      "title": "Nom"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "income",
+        "expense"
+      ],
+      "default": "expense",
+      "title": "Type"
+    },
+    "color": {
+      "type": "string",
+      "default": "#6D7175",
+      "title": "Couleur"
+    },
+    "icon": {
+      "type": "string",
+      "default": "Tag",
+      "title": "Ic\u00f4ne (Lucide)"
+    }
+  },
+  "required": [
+    "household_id",
+    "name",
+    "type"
+  ],
+  "rls": {
+    "read": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "create": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "update": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "delete": {
+      "data.household_id": "{{user.data.household_id}}"
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "name": "Subscription",
+  "type": "object",
+  "properties": {
+    "household_id": {
+      "type": "string",
+      "title": "Foyer"
+    },
+    "plan": {
+      "type": "string",
+      "enum": [
+        "starter",
+        "pro",
+        "premium",
+        "family"
+      ],
+      "default": "starter",
+      "title": "Plan d'abonnement"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "trial",
+        "active",
+        "expired"
+      ],
+      "default": "trial",
+      "title": "Statut"
+    },
+    "trial_end": {
+      "type": "string",
+      "format": "date",
+      "title": "Fin de l'essai gratuit"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date",
+      "title": "Fin de p\u00e9riode pay\u00e9e"
+    }
+  },
+  "required": [
+    "household_id",
+    "plan",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "create": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "update": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "delete": {
+      "data.household_id": "{{user.data.household_id}}"
+    }
+  }
+}

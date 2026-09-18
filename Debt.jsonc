@@ -1,0 +1,62 @@
+{
+  "name": "Debt",
+  "type": "object",
+  "properties": {
+    "household_id": {
+      "type": "string",
+      "title": "Foyer"
+    },
+    "name": {
+      "type": "string",
+      "title": "Nom de la dette"
+    },
+    "creditor": {
+      "type": "string",
+      "title": "Cr\u00e9ancier"
+    },
+    "initial_amount": {
+      "type": "number",
+      "title": "Montant initial"
+    },
+    "remaining_amount": {
+      "type": "number",
+      "title": "Montant restant"
+    },
+    "monthly_payment": {
+      "type": "number",
+      "title": "Mensualit\u00e9"
+    },
+    "interest_rate": {
+      "type": "number",
+      "title": "Taux d'int\u00e9r\u00eat annuel (%)"
+    },
+    "account_id": {
+      "type": "string",
+      "title": "Compte de remboursement"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "household_id",
+    "name",
+    "initial_amount",
+    "remaining_amount"
+  ],
+  "rls": {
+    "read": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "create": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "update": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "delete": {
+      "data.household_id": "{{user.data.household_id}}"
+    }
+  }
+}

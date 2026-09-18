@@ -1,0 +1,72 @@
+{
+  "name": "RecurringTransaction",
+  "type": "object",
+  "properties": {
+    "household_id": {
+      "type": "string",
+      "title": "Foyer"
+    },
+    "account_id": {
+      "type": "string",
+      "title": "Compte"
+    },
+    "category_id": {
+      "type": "string",
+      "title": "Cat\u00e9gorie"
+    },
+    "amount": {
+      "type": "number",
+      "title": "Montant"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "income",
+        "expense"
+      ],
+      "default": "expense",
+      "title": "Type"
+    },
+    "frequency": {
+      "type": "string",
+      "enum": [
+        "weekly",
+        "monthly",
+        "yearly"
+      ],
+      "default": "monthly",
+      "title": "Fr\u00e9quence"
+    },
+    "next_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Prochaine \u00e9ch\u00e9ance"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Libell\u00e9"
+    }
+  },
+  "required": [
+    "household_id",
+    "account_id",
+    "amount",
+    "type",
+    "frequency",
+    "next_date"
+  ],
+  "rls": {
+    "read": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "create": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "update": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "delete": {
+      "data.household_id": "{{user.data.household_id}}"
+    }
+  }
+}

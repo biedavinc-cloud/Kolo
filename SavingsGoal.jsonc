@@ -1,0 +1,51 @@
+{
+  "name": "SavingsGoal",
+  "type": "object",
+  "properties": {
+    "household_id": {
+      "type": "string",
+      "title": "Foyer"
+    },
+    "name": {
+      "type": "string",
+      "title": "Nom de l'objectif"
+    },
+    "target_amount": {
+      "type": "number",
+      "title": "Montant cible"
+    },
+    "current_amount": {
+      "type": "number",
+      "default": 0,
+      "title": "Montant \u00e9pargn\u00e9"
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date",
+      "title": "\u00c9ch\u00e9ance"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "household_id",
+    "name",
+    "target_amount"
+  ],
+  "rls": {
+    "read": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "create": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "update": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "delete": {
+      "data.household_id": "{{user.data.household_id}}"
+    }
+  }
+}

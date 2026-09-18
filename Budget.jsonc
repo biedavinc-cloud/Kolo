@@ -1,0 +1,42 @@
+{
+  "name": "Budget",
+  "type": "object",
+  "properties": {
+    "household_id": {
+      "type": "string",
+      "title": "Foyer"
+    },
+    "category_id": {
+      "type": "string",
+      "title": "Cat\u00e9gorie"
+    },
+    "amount_limit": {
+      "type": "number",
+      "title": "Plafond mensuel"
+    },
+    "month_year": {
+      "type": "string",
+      "title": "Mois (YYYY-MM)"
+    }
+  },
+  "required": [
+    "household_id",
+    "category_id",
+    "amount_limit",
+    "month_year"
+  ],
+  "rls": {
+    "read": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "create": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "update": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "delete": {
+      "data.household_id": "{{user.data.household_id}}"
+    }
+  }
+}

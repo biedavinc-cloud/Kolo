@@ -1,0 +1,44 @@
+{
+  "name": "HouseholdAuditLog",
+  "type": "object",
+  "properties": {
+    "household_id": {
+      "type": "string",
+      "title": "Foyer"
+    },
+    "action": {
+      "type": "string",
+      "title": "Action"
+    },
+    "actor": {
+      "type": "string",
+      "title": "Membre \u00e0 l'origine de l'action"
+    },
+    "target": {
+      "type": "string",
+      "title": "Cible (transaction, compte\u2026)"
+    },
+    "details": {
+      "type": "string",
+      "title": "D\u00e9tails"
+    }
+  },
+  "required": [
+    "household_id",
+    "action"
+  ],
+  "rls": {
+    "read": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "create": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "update": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "delete": {
+      "data.household_id": "{{user.data.household_id}}"
+    }
+  }
+}

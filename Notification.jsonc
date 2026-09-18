@@ -1,0 +1,68 @@
+{
+  "name": "Notification",
+  "type": "object",
+  "properties": {
+    "household_id": {
+      "type": "string",
+      "title": "Foyer"
+    },
+    "dedupe_key": {
+      "type": "string",
+      "title": "Cl\u00e9 d'unicit\u00e9 (anti-doublon)"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "budget_exceeded",
+        "budget_warning",
+        "recurring_due",
+        "trial_ending"
+      ],
+      "default": "budget_exceeded",
+      "title": "Type d'alerte"
+    },
+    "title": {
+      "type": "string",
+      "title": "Titre"
+    },
+    "message": {
+      "type": "string",
+      "title": "Message"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "danger"
+      ],
+      "default": "info",
+      "title": "Gravit\u00e9"
+    },
+    "read": {
+      "type": "boolean",
+      "default": false,
+      "title": "Lue"
+    }
+  },
+  "required": [
+    "household_id",
+    "dedupe_key",
+    "type",
+    "title"
+  ],
+  "rls": {
+    "read": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "create": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "update": {
+      "data.household_id": "{{user.data.household_id}}"
+    },
+    "delete": {
+      "data.household_id": "{{user.data.household_id}}"
+    }
+  }
+}

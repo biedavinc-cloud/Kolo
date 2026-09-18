@@ -1,0 +1,66 @@
+{
+  "name": "Household",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Nom du foyer"
+    },
+    "currency": {
+      "type": "string",
+      "title": "Devise par d\u00e9faut",
+      "default": "EUR"
+    },
+    "invite_code": {
+      "type": "string",
+      "title": "Code d'invitation (id public)"
+    },
+    "suspended": {
+      "type": "boolean",
+      "default": false,
+      "title": "Foyer suspendu (contr\u00f4le Super Admin)"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "id": "{{user.data.household_id}}"
+        },
+        {
+          "created_by_id": "{{user.id}}"
+        }
+      ]
+    },
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

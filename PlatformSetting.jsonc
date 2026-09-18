@@ -1,0 +1,44 @@
+{
+  "name": "PlatformSetting",
+  "type": "object",
+  "properties": {
+    "maintenance_mode": {
+      "type": "boolean",
+      "default": false,
+      "title": "Mode maintenance global"
+    },
+    "flag_ai_assistant": {
+      "type": "boolean",
+      "default": true,
+      "title": "Feature flag : assistant IA"
+    },
+    "flag_rapports_avances": {
+      "type": "boolean",
+      "default": true,
+      "title": "Feature flag : rapports avanc\u00e9s"
+    },
+    "updated_by": {
+      "type": "string",
+      "title": "Derni\u00e8re modification par"
+    }
+  },
+  "required": [],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

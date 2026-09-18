@@ -1,0 +1,44 @@
+{
+  "name": "SuperAdmin",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "title": "Email du super administrateur"
+    },
+    "added_by": {
+      "type": "string",
+      "title": "Ajout\u00e9 par"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "analyste"
+      ],
+      "default": "admin",
+      "title": "R\u00f4le d\u00e9l\u00e9gu\u00e9 (acc\u00e8s personnalis\u00e9s)"
+    }
+  },
+  "required": [
+    "email"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
