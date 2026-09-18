@@ -3,6 +3,8 @@
 Application de gestion budgétaire familiale. Frontend React/Vite + backend Express
 connecté à une base Postgres [Neon](https://neon.tech).
 
+**Stack :** backend Express sur Neon (Postgres), frontend hébergé sur Cloudflare Pages.
+
 > Ce dépôt utilisait auparavant Base44 comme backend hébergé. Cette dépendance a été
 > retirée : toute la logique métier vit maintenant dans `server/` (Express + Neon).
 > L'ancien export Base44 (schémas d'entités, fonctions serverless) est conservé pour
