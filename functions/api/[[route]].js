@@ -40,6 +40,16 @@ function requireSuperAdmin(c, next) {
 
 app.get('/health', (c) => c.json({ ok: true }));
 
+app.get('/health/db', async (c) => {
+  try {
+    const query = c.get('query');
+    await query('select 1', []);
+    return c.json({ ok: true, db: 'connected' });
+  } catch (err) {
+    return c.json({ ok: false, db: 'unreachable', detail: `${err.name}: ${err.message}` }, 500);
+  }
+});
+
 // --- auth ----------------------------------------------------------------
 
 async function isSuperAdmin(query, email) {
@@ -691,7 +701,10 @@ app.post('/checkout/webhook', (c) => c.json({ error: 'Webhook Stripe non configu
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 app.onError((err, c) => {
   console.error(err);
-  return c.json({ error: 'Erreur serveur inattendue' }, 500);
+  // Detail temporarily included so the actual cause is visible in the
+  // browser Network tab while we're bringing this deployment up — remove
+  // once things are confirmed stable.
+  return c.json({ error: 'Erreur serveur inattendue', detail: `${err.name}: ${err.message}` }, 500);
 });
 
 export const onRequest = (context) => app.fetch(context.request, context.env, context);
