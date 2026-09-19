@@ -9,6 +9,11 @@ const clearStoredAccessToken = () => {
 	window.localStorage.removeItem('token');
 }
 
+// Legacy base44 embed flow used an access token forwarded by the parent
+// frame; this app now authenticates via its own httpOnly session cookie
+// (see src/api/client.js), so there is no separate access token to read.
+const getAccessToken = () => null;
+
 const getAppParams = () => {
 	if (isClearAccessTokenRequested()) {
 		clearStoredAccessToken();
