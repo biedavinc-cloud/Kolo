@@ -48,13 +48,14 @@ async function request(path, { method = 'GET', body, query } = {}) {
     });
   } catch (networkErr) {
     // "Failed to fetch" seul ne dit rien à l'utilisateur ni au développeur.
-    // La cause quasi systématique : VITE_API_URL n'est pas configuré au build
-    // (Cloudflare Pages) et retombe sur localhost:8787, injoignable pour un
-    // vrai visiteur — ou alors le backend n'est simplement pas déployé/up.
+    // Le backend est déployé en Cloudflare Pages Functions à la même origine
+    // par défaut ; si ça échoue quand même, l'API n'a probablement pas pu se
+    // connecter à Neon (DATABASE_URL manquant/invalide côté Cloudflare) ou
+    // VITE_API_URL pointe vers une origine injoignable.
     console.error(`[api] Impossible de joindre ${API_BASE}${path} :`, networkErr);
     throw new Error(
-      `Serveur injoignable (${API_BASE}). Vérifiez que le backend est déployé et que ` +
-      `VITE_API_URL pointe dessus.`
+      `Serveur injoignable (${API_BASE || 'même origine'}). Vérifiez la configuration ` +
+      `Cloudflare Pages (variable DATABASE_URL) et, si vous utilisez un backend externe, VITE_API_URL.`
     );
   }
   if (res.status === 204) return null;
