@@ -33,7 +33,7 @@ export default function PricingPlans({ currentPlan, onSelect, selecting }) {
               </p>
 
               <div className="mt-5 flex items-baseline gap-1.5">
-                <span className="text-4xl font-extrabold tracking-tight">${p.price}</span>
+                <span className="text-4xl font-extrabold tracking-tight">{p.price} €</span>
                 <span className={cn("text-sm", popular ? "text-gray-400" : "text-gray-500 dark:text-muted-foreground")}>
                   /mois
                 </span>

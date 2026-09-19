@@ -36,6 +36,9 @@ import Dettes from '@/pages/Dettes';
 import FluxTresorerie from '@/pages/FluxTresorerie';
 import Profil from '@/pages/Profil';
 import Landing from '@/pages/Landing';
+import MentionsLegales from '@/pages/legal/MentionsLegales';
+import Confidentialite from '@/pages/legal/Confidentialite';
+import CGU from '@/pages/legal/CGU';
 import Abonnement from '@/pages/Abonnement';
 import SuperAdmin from '@/pages/SuperAdmin';
 import JournalActivite from '@/pages/JournalActivite';
@@ -65,6 +68,9 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/mentions-legales" element={<MentionsLegales />} />
+      <Route path="/confidentialite" element={<Confidentialite />} />
+      <Route path="/cgu" element={<CGU />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
