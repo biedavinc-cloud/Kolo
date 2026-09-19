@@ -61,7 +61,10 @@ async function request(path, { method = 'GET', body, query } = {}) {
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(data?.error || `Erreur ${res.status}`);
+    const message = data?.error || `Erreur ${res.status}`;
+    const err = new Error(data?.detail ? `${message} (${data.detail})` : message);
+    err.status = res.status;
+    throw err;
   }
   return data;
 }

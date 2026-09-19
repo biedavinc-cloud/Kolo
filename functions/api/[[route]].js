@@ -5,6 +5,16 @@ import { ENTITIES } from './_lib/entities.config.js';
 
 const app = new Hono().basePath('/api');
 
+// Equivalent of the Express server's helmet() — lost in the port to Hono,
+// restored here (minimal set relevant to a JSON API, no inline-script needs).
+app.use('*', async (c, next) => {
+  await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('Cross-Origin-Resource-Policy', 'cross-origin');
+});
+
 // --- middleware: attach db + auth to context -------------------------------
 
 app.use('*', async (c, next) => {
@@ -52,6 +62,28 @@ app.get('/health/db', async (c) => {
 
 // --- auth ----------------------------------------------------------------
 
+// Best-effort rate limiting for auth endpoints: per-isolate in-memory counter
+// (Express had express-rate-limit; there's no KV/Durable Object bound here to
+// do this properly across the whole edge, so this only throttles bursts that
+// happen to land on the same warm isolate — better than nothing, not a real
+// substitute for one bound to Cloudflare KV/Durable Objects later).
+const authAttempts = new Map();
+function rateLimitAuth(c, next) {
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const entry = authAttempts.get(ip);
+  if (entry && now - entry.start < windowMs) {
+    if (entry.count >= 20) {
+      return c.json({ error: 'Trop de tentatives, réessayez plus tard.' }, 429);
+    }
+    entry.count += 1;
+  } else {
+    authAttempts.set(ip, { start: now, count: 1 });
+  }
+  return next();
+}
+
 async function isSuperAdmin(query, email) {
   const { rows } = await query('select role from super_admins where email = $1', [email]);
   return rows[0]?.role || null;
@@ -61,7 +93,7 @@ async function loadUserPayload(query, userRow) {
   return { ...userRow, is_super_admin: !!superAdminRole, super_admin_role: superAdminRole };
 }
 
-app.post('/auth/register', async (c) => {
+app.post('/auth/register', rateLimitAuth, async (c) => {
   const query = c.get('query');
   const body = await c.req.json().catch(() => ({}));
   const { email, password, full_name } = body || {};
@@ -81,7 +113,7 @@ app.post('/auth/register', async (c) => {
   return c.json({ token, user: publicUser(user) }, 201);
 });
 
-app.post('/auth/login', async (c) => {
+app.post('/auth/login', rateLimitAuth, async (c) => {
   const query = c.get('query');
   const body = await c.req.json().catch(() => ({}));
   const { email, password } = body || {};
