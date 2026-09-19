@@ -51,31 +51,45 @@ npm run dev    # http://localhost:5173, proxy /api -> localhost:8787
 
 ## Déploiement sur Cloudflare
 
-⚠️ **Important : seul le frontend peut être déployé tel quel sur Cloudflare Pages.**
-Le backend (`server/`) est un serveur Express classique (`app.listen`, WebSocket pour
-Neon, webhook Stripe brut, JWT) : ce n'est **pas** compatible avec le runtime Workers
-de Cloudflare Pages Functions sans réécriture significative. Pour l'instant, hébergez
-`server/` sur une plateforme Node.js classique (Railway, Render, Fly.io, un VPS...),
-et pointez le frontend dessus.
+Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
 
-### Frontend → Cloudflare Pages
+- Le frontend (React/Vite) est buildé normalement (`npm run build` → `dist/`).
+- Le backend est porté en **Cloudflare Pages Functions** sous `functions/api/`
+  (`[[route]].js`, routeur [Hono](https://hono.dev)) : même logique et mêmes routes que
+  `server/` (Express), mais avec `jose` à la place de `jsonwebtoken` et le driver HTTP
+  de `@neondatabase/serverless` à la place de `pg`/`ws` — deux libs qui ne tournent pas
+  dans le runtime Workers. `server/` (Express) reste dans le dépôt comme référence et
+  pour du développement local hors-Cloudflare si besoin, mais n'est plus ce qui est
+  déployé.
+- Comme le frontend et l'API sont servis depuis la **même origine**, `src/api/client.js`
+  appelle `/api/...` en relatif par défaut : pas besoin de `VITE_API_URL` en production
+  (ni de CORS, puisqu'il n'y a plus qu'une seule origine).
+
+### Configuration Cloudflare Pages
 
 - **Build command** : `npm run build`
 - **Build output directory** : `dist`
-- **Variable d'environnement** : `VITE_API_URL` = l'URL publique de votre backend
-  (ex. `https://api.kolo.example.com`)
-- Le fichier `public/_redirects` (`/* /index.html 200`) est déjà en place pour que
-  le routage côté client (React Router) fonctionne sur Cloudflare Pages.
+- **Variables d'environnement** (Settings → Environment variables), en secret pour les
+  deux premières :
+  - `DATABASE_URL` — connexion Neon (pooled connection string)
+  - `JWT_SECRET` — chaîne aléatoire longue (`node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`)
+  - `JWT_EXPIRES_IN` (optionnel, défaut `30d`)
+  - `CORE_SUPER_ADMIN_EMAILS` (optionnel, emails séparés par des virgules)
+  - `ANTHROPIC_API_KEY` / `RESEND_API_KEY` / `EMAIL_FROM` (optionnels — assistant IA et
+    emails d'invitation restent désactivés proprement, avec un message clair, tant que
+    ces clés ne sont pas fournies)
+- `public/_redirects` (`/* /index.html 200`) gère déjà le routage React Router côté
+  client sur Cloudflare Pages.
 
-### Backend → hébergeur Node
+### Ce qui n'est pas encore porté
 
-- Déployez le contenu de `server/` avec les variables de `server/.env.example`
-  renseignées (dont `DATABASE_URL` Neon, `JWT_SECRET`, `FRONTEND_URL` pointant vers
-  votre domaine Cloudflare Pages pour CORS).
-- `npm run migrate` une fois pour appliquer `schema.sql` sur la base Neon de
-  production.
+- **Upload de fichiers** (`/api/uploads`) : `server/` écrivait sur disque local, ce qui
+  n'existe pas dans Workers. Renvoie un 501 explicite pour l'instant — brancher un
+  bucket Cloudflare R2 pour l'activer.
+- **Paiement Stripe** (`/api/checkout/*`) : le SDK Stripe Node n'est pas chargé dans le
+  Worker pour l'instant (pour garder le bundle léger). Renvoie un 501 explicite tant
+  que ce n'est pas branché — non bloquant puisqu'aucune clé Stripe n'est configurée de
+  toute façon.
+- Connexion Google/Apple : toujours non configurée (nécessite des identifiants OAuth
+  réels côté Google/Apple).
 
-Si vous voulez plus tard porter `server/` sur Cloudflare Workers directement
-(le driver `@neondatabase/serverless` est compatible Workers), il faudra remplacer
-Express par un routeur compatible Workers (Hono, itty-router...) — dites-le moi si
-vous voulez que je m'en occupe.

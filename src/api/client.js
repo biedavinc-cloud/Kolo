@@ -4,7 +4,10 @@
 // l'ancien `db.entities.X.list()/.filter()/.create()/...` pour ne pas avoir
 // à réécrire chaque page.
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+// Same-origin by default: the API is deployed as Cloudflare Pages Functions
+// alongside this static site, so relative /api/... requests just work. Set
+// VITE_API_URL only if the backend is ever hosted on a different origin.
+const API_BASE = import.meta.env.VITE_API_URL || '';
 const TOKEN_KEY = 'kolo_token';
 
 function getToken() {
