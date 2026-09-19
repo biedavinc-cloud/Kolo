@@ -42,8 +42,22 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await db.auth.register({ email, password });
-      setShowOtp(true);
+      await db.auth.register(email, password, fullName.trim());
+      // Pas de service d'envoi de code OTP par email configuré côté serveur
+      // (client.js: "l'inscription valide directement le compte") : on saute
+      // l'étape de vérification et on complète le profil directement.
+      try {
+        await db.auth.updateMe({
+          display_name: fullName.trim(),
+          phone_country_code: phone.country || detectDialCode(),
+          phone_number: phone.number.replace(/\s+/g, ""),
+        });
+      } catch (profileErr) {
+        console.warn("Profil non enregistré, complété à l'onboarding");
+      }
+      window.location.href = inviteCode
+        ? `/onboarding?code=${encodeURIComponent(inviteCode)}`
+        : safeReturnTo();
     } catch (err) {
       setError(err.message || "Échec de l'inscription");
     } finally {
