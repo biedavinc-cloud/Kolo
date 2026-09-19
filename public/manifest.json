@@ -1,7 +1,7 @@
 {
   "name": "Kolo — Gestion financière familiale",
   "short_name": "Kolo",
-  "description": "Suivez en famille vos dépenses, budgets, épargnes, dettes et objectifs financiers.",
+  "description": "Suivez en famille vos dépenses, budgets, épargnes, dettes et objectifs financiers en plusieurs devises.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

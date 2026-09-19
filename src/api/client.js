@@ -36,14 +36,27 @@ async function request(path, { method = 'GET', body, query } = {}) {
     if (qs) url += `?${qs}`;
   }
   const token = getToken();
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'content-type': 'application/json',
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (networkErr) {
+    // "Failed to fetch" seul ne dit rien à l'utilisateur ni au développeur.
+    // La cause quasi systématique : VITE_API_URL n'est pas configuré au build
+    // (Cloudflare Pages) et retombe sur localhost:8787, injoignable pour un
+    // vrai visiteur — ou alors le backend n'est simplement pas déployé/up.
+    console.error(`[api] Impossible de joindre ${API_BASE}${path} :`, networkErr);
+    throw new Error(
+      `Serveur injoignable (${API_BASE}). Vérifiez que le backend est déployé et que ` +
+      `VITE_API_URL pointe dessus.`
+    );
+  }
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
   if (!res.ok) {
