@@ -1,25 +1,22 @@
 # Kolo
 
-Application de gestion budgétaire familiale. Frontend React/Vite + backend
-[Hono](https://hono.dev) sur **Cloudflare Workers**, connecté à une base
-Postgres [Neon](https://neon.tech).
+Application de gestion budgétaire familiale. Frontend React/Vite + backend Express
+connecté à une base Postgres [Neon](https://neon.tech).
 
-> Ce dépôt utilisait auparavant Base44 comme backend hébergé, puis un serveur
-> Express classique. Les deux ont été retirés : le backend est maintenant un
-> Worker Cloudflare (Hono + client HTTP Neon), pour tourner sur la même
-> plateforme que le frontend. L'ancien export Base44 est conservé pour
+**Stack :** backend Express sur Neon (Postgres), frontend hébergé sur Cloudflare Pages.
+
+> Ce dépôt utilisait auparavant Base44 comme backend hébergé. Cette dépendance a été
+> retirée : toute la logique métier vit maintenant dans `server/` (Express + Neon).
+> L'ancien export Base44 (schémas d'entités, fonctions serverless) est conservé pour
 > référence dans `server/legacy-base44/` mais n'est plus exécuté.
 
 ## Structure
 
 ```
-src/                     Frontend React (Vite) — pages, composants, hooks
-server/src/worker.js     Point d'entrée du Worker Cloudflare (CORS, sécurité, rate limiting, routes)
-server/src/routes/       Routes API (logique métier, inchangée depuis la version Express)
-server/src/compat.js     Fine couche de compatibilité Express Router → Hono
-server/schema.sql        Schéma Postgres à appliquer sur votre base Neon
-server/src/migrate.js    Script Node (hors Worker) qui applique schema.sql
-server/legacy-base44/    Ancien export Base44 (référence uniquement)
+src/            Frontend React (Vite) — pages, composants, hooks
+server/         Backend Express — routes API, auth JWT, accès Neon
+server/schema.sql   Schéma Postgres à appliquer sur votre base Neon
+server/legacy-base44/   Ancien export Base44 (référence uniquement)
 ```
 
 ## Développement local
@@ -31,19 +28,18 @@ server/legacy-base44/    Ancien export Base44 (référence uniquement)
 3. `cd server && cp .env.example .env`, puis renseignez `DATABASE_URL` (et
    `JWT_SECRET` — générez-en un avec
    `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`).
-4. Appliquez le schéma (ce script tourne en Node, hors Worker) :
+4. Appliquez le schéma :
    ```bash
    cd server
    npm install
    npm run migrate
    ```
 
-### 2. Backend (Worker)
+### 2. Backend
 
 ```bash
 cd server
-cp .dev.vars.example .dev.vars   # renseignez DATABASE_URL et JWT_SECRET
-npm run dev    # wrangler dev — http://localhost:8787
+npm run dev    # http://localhost:8787
 ```
 
 ### 3. Frontend
@@ -55,49 +51,45 @@ npm run dev    # http://localhost:5173, proxy /api -> localhost:8787
 
 ## Déploiement sur Cloudflare
 
-### Backend → Cloudflare Workers
+Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
 
-```bash
-cd server
-npx wrangler login
-npx wrangler r2 bucket create kolo-uploads   # stockage des reçus/avatars uploadés
+- Le frontend (React/Vite) est buildé normalement (`npm run build` → `dist/`).
+- Le backend est porté en **Cloudflare Pages Functions** sous `functions/api/`
+  (`[[route]].js`, routeur [Hono](https://hono.dev)) : même logique et mêmes routes que
+  `server/` (Express), mais avec `jose` à la place de `jsonwebtoken` et le driver HTTP
+  de `@neondatabase/serverless` à la place de `pg`/`ws` — deux libs qui ne tournent pas
+  dans le runtime Workers. `server/` (Express) reste dans le dépôt comme référence et
+  pour du développement local hors-Cloudflare si besoin, mais n'est plus ce qui est
+  déployé.
+- Comme le frontend et l'API sont servis depuis la **même origine**, `src/api/client.js`
+  appelle `/api/...` en relatif par défaut : pas besoin de `VITE_API_URL` en production
+  (ni de CORS, puisqu'il n'y a plus qu'une seule origine).
 
-# Secrets (jamais dans wrangler.toml, qui est versionné) :
-npx wrangler secret put DATABASE_URL
-npx wrangler secret put JWT_SECRET
-# Optionnels selon les fonctionnalités activées :
-npx wrangler secret put STRIPE_SECRET_KEY
-npx wrangler secret put STRIPE_WEBHOOK_SECRET
-npx wrangler secret put ANTHROPIC_API_KEY
-npx wrangler secret put RESEND_API_KEY
-
-npx wrangler deploy
-```
-
-Une fois déployé, notez l'URL du Worker (`https://kolo-api.<votre-sous-domaine>.workers.dev`,
-ou votre domaine personnalisé si configuré) — c'est votre `VITE_API_URL`.
-
-Pensez aussi à mettre à jour la variable `FRONTEND_URL` dans `server/wrangler.toml`
-(section `[vars]`) avec l'URL réelle de votre déploiement Cloudflare Pages, pour
-que le CORS l'autorise — sinon le frontend restera bloqué en "Failed to fetch".
-
-### Frontend → Cloudflare Pages
+### Configuration Cloudflare Pages
 
 - **Build command** : `npm run build`
 - **Build output directory** : `dist`
-- **Variable d'environnement** : `VITE_API_URL` = l'URL du Worker ci-dessus
-- Le fichier `public/_redirects` (`/* /index.html 200`) est déjà en place pour que
-  le routage côté client (React Router) fonctionne sur Cloudflare Pages.
+- **Variables d'environnement** (Settings → Environment variables), en secret pour les
+  deux premières :
+  - `DATABASE_URL` — connexion Neon (pooled connection string)
+  - `JWT_SECRET` — chaîne aléatoire longue (`node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`)
+  - `JWT_EXPIRES_IN` (optionnel, défaut `30d`)
+  - `CORE_SUPER_ADMIN_EMAILS` (optionnel, emails séparés par des virgules)
+  - `ANTHROPIC_API_KEY` / `RESEND_API_KEY` / `EMAIL_FROM` (optionnels — assistant IA et
+    emails d'invitation restent désactivés proprement, avec un message clair, tant que
+    ces clés ne sont pas fournies)
+- `public/_redirects` (`/* /index.html 200`) gère déjà le routage React Router côté
+  client sur Cloudflare Pages.
 
-### Notes d'architecture du Worker
+### Ce qui n'est pas encore porté
 
-- **Base de données** : client HTTP `@neondatabase/serverless` (`neon()`), pas de
-  pool de connexions — chaque requête est un appel `fetch` indépendant vers Neon.
-- **Fichiers uploadés** (reçus, avatars) : stockés dans le bucket R2 `kolo-uploads`,
-  servis via `GET /uploads/:key` — un Worker n'a pas de disque persistant.
-- **Rate limiting** : binding natif Cloudflare (`AUTH_RATE_LIMITER`, 20 req/min)
-  sur `/api/auth/*`, plutôt qu'un compteur en mémoire (qui n'aurait aucun sens
-  réparti sur des isolates Workers).
-- **Stripe** : client configuré avec `httpClient: Stripe.createFetchHttpClient()`
-  et vérification de webhook via `constructEventAsync` — le SDK Stripe par défaut
-  utilise les modules `http`/`https` de Node, indisponibles sur Workers.
+- **Upload de fichiers** (`/api/uploads`) : `server/` écrivait sur disque local, ce qui
+  n'existe pas dans Workers. Renvoie un 501 explicite pour l'instant — brancher un
+  bucket Cloudflare R2 pour l'activer.
+- **Paiement Stripe** (`/api/checkout/*`) : le SDK Stripe Node n'est pas chargé dans le
+  Worker pour l'instant (pour garder le bundle léger). Renvoie un 501 explicite tant
+  que ce n'est pas branché — non bloquant puisqu'aucune clé Stripe n'est configurée de
+  toute façon.
+- Connexion Google/Apple : toujours non configurée (nécessite des identifiants OAuth
+  réels côté Google/Apple).
+
