@@ -139,19 +139,28 @@ app.get('/auth/me', requireAuth, async (c) => {
 app.put('/auth/me', requireAuth, async (c) => {
   const query = c.get('query');
   const body = (await c.req.json().catch(() => ({}))) || {};
-  const allowed = ['full_name', 'household_id'];
-  const updates = [];
+  const REAL_COLUMNS = ['full_name', 'household_id'];
+
+  const columnUpdates = [];
   const values = [];
   let i = 1;
-  for (const key of allowed) {
+  for (const key of REAL_COLUMNS) {
     if (key in body) {
-      updates.push(`${key} = $${i++}`);
+      columnUpdates.push(`${key} = $${i++}`);
       values.push(body[key]);
     }
   }
-  if (!updates.length) return c.json({ error: 'Aucun champ à mettre à jour' }, 400);
+  // Everything else (display_name, phone_*, avatar_url, notif_*,
+  // display_currency…) is free-form profile data, merged into `users.data`.
+  const dataPatch = Object.fromEntries(Object.entries(body).filter(([k]) => !REAL_COLUMNS.includes(k)));
+  if (Object.keys(dataPatch).length > 0) {
+    columnUpdates.push(`data = data || $${i++}::jsonb`);
+    values.push(JSON.stringify(dataPatch));
+  }
+
+  if (!columnUpdates.length) return c.json({ error: 'Aucun champ à mettre à jour' }, 400);
   values.push(c.get('user').sub);
-  const { rows } = await query(`update users set ${updates.join(', ')} where id = $${i} returning *`, values);
+  const { rows } = await query(`update users set ${columnUpdates.join(', ')} where id = $${i} returning *`, values);
   const user = await loadUserPayload(query, rows[0]);
   return c.json(publicUser(user));
 });
@@ -209,6 +218,12 @@ app.get('/household', requireAuth, async (c) => {
   return c.json(rows[0] || null);
 });
 
+async function reissueToken(c, query, userId) {
+  const { rows } = await query('select * from users where id = $1', [userId]);
+  const user = await loadUserPayload(query, rows[0]);
+  return signToken(c.env, user);
+}
+
 app.post('/household', requireAuth, async (c) => {
   const query = c.get('query');
   const user = c.get('user');
@@ -222,7 +237,11 @@ app.post('/household', requireAuth, async (c) => {
   );
   const household = rows[0];
   await query('update users set household_id = $1 where id = $2', [household.id, user.sub]);
-  return c.json(household, 201);
+  // The session token still has the old (null) household_id — reissue one
+  // now so the very next request (e.g. bulk-creating default categories)
+  // isn't rejected as "no household associated with this account".
+  const token = await reissueToken(c, query, user.sub);
+  return c.json({ ...household, token }, 201);
 });
 
 app.put('/household', requireAuth, async (c) => {
@@ -256,7 +275,8 @@ app.post('/household/join', requireAuth, async (c) => {
   if (!rows[0]) return c.json({ error: 'Code invalide' }, 404);
   if (rows[0].suspended) return c.json({ error: 'Ce foyer est suspendu' }, 403);
   await query('update users set household_id = $1 where id = $2', [rows[0].id, user.sub]);
-  return c.json(rows[0]);
+  const token = await reissueToken(c, query, user.sub);
+  return c.json({ ...rows[0], token });
 });
 
 // --- entities-users ----------------------------------------------------

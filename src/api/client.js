@@ -87,9 +87,17 @@ function makeEntityClient(name) {
 // Household et User ont des routes dédiées côté serveur (portée spéciale).
 const householdClient = {
   get: () => request('/api/household'),
-  create: (data) => request('/api/household', { method: 'POST', body: data }),
+  create: async (data) => {
+    const res = await request('/api/household', { method: 'POST', body: data });
+    if (res?.token) setToken(res.token);
+    return res;
+  },
   update: (data) => request('/api/household', { method: 'PUT', body: data }),
-  join: (invite_code) => request('/api/household/join', { method: 'POST', body: { invite_code } }),
+  join: async (invite_code) => {
+    const res = await request('/api/household/join', { method: 'POST', body: { invite_code } });
+    if (res?.token) setToken(res.token);
+    return res;
+  },
 };
 
 const userClient = {
