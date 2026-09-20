@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { makeQuery } from './_lib/db.js';
 import { hashPassword, verifyPassword, signToken, verifyToken, publicUser } from './_lib/auth.js';
 import { ENTITIES } from './_lib/entities.config.js';
+import { availableProviders, getProvider } from './_lib/psp/index.js';
 
 const app = new Hono().basePath('/api');
 
@@ -982,12 +983,81 @@ app.post('/invite', requireAuth, async (c) => {
   return c.json({ ok: r.ok, delivered: r.ok });
 });
 
-// Stripe needs its Node SDK (not loaded here to keep the Worker bundle small
-// and avoid Node-runtime assumptions); until it's wired up for this runtime,
-// checkout/webhook stay gracefully "not configured", same as when the
-// Express server had no STRIPE_SECRET_KEY set.
-app.post('/checkout/create', requireAuth, (c) => c.json({ error: 'Paiement non configuré.' }, 501));
-app.post('/checkout/webhook', (c) => c.json({ error: 'Webhook Stripe non configuré.' }, 501));
+// --- checkout / paiement multi-PSP -----------------------------------
+// 5 fournisseurs supportés : Stripe, Paystack, Flutterwave, PayUnit, Paddle.
+// Chacun n'est actif que si ses clés d'API sont configurées en variables
+// d'environnement (voir functions/api/_lib/psp/*.js) — sinon il n'apparaît
+// simplement pas dans la liste des fournisseurs disponibles.
+
+const PLAN_LABELS = { starter: 'Starter', pro: 'Pro', premium: 'Premium', family: 'Family' };
+
+app.get('/checkout/providers', (c) => c.json({ providers: availableProviders(c.env) }));
+
+app.post('/checkout/create', requireAuth, async (c) => {
+  const query = c.get('query');
+  const user = c.get('user');
+  if (!user.household_id) return c.json({ error: 'Aucun foyer associé à ce compte' }, 400);
+
+  const body = await c.req.json().catch(() => ({}));
+  const { plan, provider: providerId } = body || {};
+  if (!PLAN_PRICES[plan]) return c.json({ error: 'Plan inconnu' }, 400);
+
+  const provider = getProvider(c.env, providerId);
+  if (!provider) {
+    const available = availableProviders(c.env);
+    if (available.length === 0) return c.json({ error: 'Aucun moyen de paiement configuré.' }, 501);
+    return c.json({ error: 'Fournisseur de paiement invalide ou non configuré.', providers: available }, 400);
+  }
+
+  const origin = c.env.FRONTEND_URL || new URL(c.req.url).origin;
+  try {
+    const session = await provider.createCheckoutSession(c.env, {
+      plan,
+      planLabel: PLAN_LABELS[plan],
+      amountUsd: PLAN_PRICES[plan],
+      household_id: user.household_id,
+      email: user.email,
+      successUrl: `${origin}/abonnement?checkout=success`,
+      cancelUrl: `${origin}/abonnement?checkout=cancelled`,
+      webhookUrl: `${origin}/api/checkout/webhook/${provider.id}`,
+    });
+    await writeAudit(query, user, 'checkout.create', user.household_id, { plan, provider: provider.id });
+    return c.json(session);
+  } catch (err) {
+    console.error(`[checkout:${provider.id}]`, err);
+    return c.json({ error: err.message || 'Échec de création du paiement' }, 502);
+  }
+});
+
+app.post('/checkout/webhook/:provider', async (c) => {
+  const query = c.get('query');
+  const provider = getProvider(c.env, c.req.param('provider'));
+  if (!provider) return c.json({ error: 'Fournisseur inconnu ou non configuré' }, 404);
+
+  const rawBody = await c.req.text();
+  let result;
+  try {
+    result = await provider.verifyAndParseWebhook(c.env, c.req.raw, rawBody);
+  } catch (err) {
+    console.error(`[webhook:${provider.id}]`, err);
+    return c.json({ error: 'Payload invalide' }, 400);
+  }
+  if (!result) return c.json({ ok: true, ignored: true }); // signature invalide ou événement non pertinent
+
+  const { household_id, plan, status } = result;
+  if (!household_id) return c.json({ ok: true, ignored: true });
+
+  await query(
+    `insert into subscriptions (household_id, plan, status) values ($1, $2, $3)
+     on conflict (household_id) do update set plan = coalesce($2, subscriptions.plan), status = $3`,
+    [household_id, plan || null, status || 'active']
+  );
+  await query(
+    'insert into audit_logs (action, actor_email, target, details) values ($1, $2, $3, $4)',
+    [`checkout.webhook.${provider.id}`, 'system', household_id, JSON.stringify({ plan, status })]
+  );
+  return c.json({ ok: true });
+});
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 app.onError((err, c) => {

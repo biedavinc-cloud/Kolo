@@ -78,6 +78,21 @@ Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
   - `ANTHROPIC_API_KEY` / `RESEND_API_KEY` / `EMAIL_FROM` (optionnels — assistant IA et
     emails d'invitation restent désactivés proprement, avec un message clair, tant que
     ces clés ne sont pas fournies)
+  - Paiement — 5 PSP supportés, chacun optionnel et indépendant (voir
+    `functions/api/_lib/psp/`). Un plan reste sélectionnable sans paiement configuré, mais
+    aucun moyen de paiement n'apparaît tant qu'aucune des clés ci-dessous n'est renseignée :
+    - **Stripe** : `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
+    - **Paystack** : `PAYSTACK_SECRET_KEY`, `PAYSTACK_CURRENCY` (optionnel, défaut `USD`)
+    - **Flutterwave** : `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_HASH`,
+      `FLUTTERWAVE_CURRENCY` (optionnel, défaut `USD`)
+    - **PayUnit** : `PAYUNIT_API_KEY`, `PAYUNIT_API_USER`, `PAYUNIT_API_PASSWORD`,
+      `PAYUNIT_MODE` (`test`|`live`), `PAYUNIT_CURRENCY` (optionnel, défaut `XAF`) — ⚠️
+      intégration non testée contre un vrai sandbox, à vérifier en priorité
+    - **Paddle** : `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_MODE` (`sandbox`|`live`)
+    - Webhooks à configurer chez chaque PSP vers
+      `https://<votre-domaine>/api/checkout/webhook/<stripe|paystack|flutterwave|payunit|paddle>`
+    - `FRONTEND_URL` (optionnel) — origine utilisée pour les URL de retour de paiement ;
+      sinon déduite de la requête entrante
 - `public/_redirects` (`/* /index.html 200`) gère déjà le routage React Router côté
   client sur Cloudflare Pages.
 
@@ -86,10 +101,12 @@ Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
 - **Upload de fichiers** (`/api/uploads`) : `server/` écrivait sur disque local, ce qui
   n'existe pas dans Workers. Renvoie un 501 explicite pour l'instant — brancher un
   bucket Cloudflare R2 pour l'activer.
-- **Paiement Stripe** (`/api/checkout/*`) : le SDK Stripe Node n'est pas chargé dans le
-  Worker pour l'instant (pour garder le bundle léger). Renvoie un 501 explicite tant
-  que ce n'est pas branché — non bloquant puisqu'aucune clé Stripe n'est configurée de
-  toute façon.
+- **Paiement** : intégrations Stripe/Paystack/Flutterwave/Paddle écrites contre l'API
+  REST documentée de chaque fournisseur, mais **non testées contre un vrai
+  sandbox** (aucune clé disponible pendant le développement, et ces domaines ne sont
+  pas joignables depuis l'environnement où ce code a été écrit). PayUnit en particulier
+  est peu documenté publiquement — à vérifier en priorité. Tester chaque PSP en mode
+  test avant d'activer ses clés en production.
 - Connexion Google/Apple : toujours non configurée (nécessite des identifiants OAuth
   réels côté Google/Apple).
 
