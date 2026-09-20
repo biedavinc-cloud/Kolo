@@ -54,6 +54,18 @@ export default function LandingFooter() {
             <p className="mt-3 max-w-[260px] text-sm leading-relaxed text-gray-400">
               La finance familiale, collaborative et sécurisée.
             </p>
+            <p className="mt-2 max-w-[260px] text-xs leading-relaxed text-gray-500">
+              Développé par{" "}
+              <a
+                href="https://www.liafrik.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-gray-300 underline decoration-gray-600 underline-offset-2 hover:text-white"
+              >
+                LiAfrik
+              </a>{" "}
+              — Dubaï &amp; Afrique.
+            </p>
             <div className="mt-4 flex items-center gap-3">
               <a href="#" aria-label="LinkedIn" className="text-gray-400 transition-colors hover:text-white">
                 <Linkedin className="h-4 w-4" />
@@ -79,7 +91,18 @@ export default function LandingFooter() {
         </div>
 
         <div className="mt-10 flex flex-col items-start justify-between gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
-          <p className="text-xs text-gray-400">© {new Date().getFullYear()} Kolo. Tous droits réservés.</p>
+          <p className="text-xs text-gray-400">
+            © {new Date().getFullYear()} Kolo, par{" "}
+            <a
+              href="https://www.liafrik.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-300 underline decoration-gray-600 underline-offset-2 hover:text-white"
+            >
+              LiAfrik
+            </a>
+            . Tous droits réservés.
+          </p>
           <Link to="/login" className="text-xs text-gray-400 transition-colors hover:text-white">
             Espace membre
           </Link>

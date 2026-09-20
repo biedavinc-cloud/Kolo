@@ -350,7 +350,12 @@ function getEntityConfig(c, next) {
 function parseSort(sort, fallback) {
   if (!sort) return fallback;
   const desc = sort.startsWith('-');
-  const col = desc ? sort.slice(1) : sort;
+  let col = desc ? sort.slice(1) : sort;
+  // Alias hérité des noms de champs base44 (created_date) vers la vraie
+  // colonne Postgres (created_at) — plusieurs pages du frontend trient
+  // encore par "-created_date" (Notification, Announcement, HouseholdAuditLog).
+  if (col === 'created_date') col = 'created_at';
+  if (col === 'updated_date') col = 'updated_at';
   if (!/^[a-z_]+$/.test(col)) return fallback;
   return `${col} ${desc ? 'desc' : 'asc'}`;
 }
@@ -424,7 +429,9 @@ entities.get('/:entity', async (c) => {
 
   const sort = parseSort(c.req.query('sort'), cfg.defaultSort);
   const limit = Math.min(parseInt(c.req.query('limit') || '', 10) || 1000, 5000);
-  const sql = `select * from ${cfg.table} ${where.length ? 'where ' + where.join(' and ') : ''} order by ${sort} limit $${i}`;
+  // created_at est aussi exposé sous created_date : plusieurs pages du
+  // frontend (héritées des conventions base44) lisent encore ce nom-là.
+  const sql = `select *, created_at as created_date from ${cfg.table} ${where.length ? 'where ' + where.join(' and ') : ''} order by ${sort} limit $${i}`;
   values.push(limit);
 
   const { rows } = await query(sql, values);
@@ -442,7 +449,7 @@ entities.get('/:entity/:id', async (c) => {
     where.push(`household_id = $2`);
     values.push(user.household_id);
   }
-  const { rows } = await query(`select * from ${cfg.table} where ${where.join(' and ')}`, values);
+  const { rows } = await query(`select *, created_at as created_date from ${cfg.table} where ${where.join(' and ')}`, values);
   if (!rows[0]) return c.json({ error: 'Introuvable' }, 404);
   return c.json(rows[0]);
 });
@@ -645,8 +652,8 @@ superadmin.get('/dashboard', async (c) => {
       from users order by created_at desc limit 1000
     `),
     query('select * from platform_settings order by updated_at desc limit 1'),
-    query('select * from audit_logs order by created_at desc limit 50'),
-    query('select * from announcements order by created_at desc limit 20'),
+    query('select *, created_at as created_date from audit_logs order by created_at desc limit 50'),
+    query('select *, created_at as created_date from announcements order by created_at desc limit 20'),
     query(`
       select
         (select count(*)::int from households) as households_total,

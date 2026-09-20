@@ -12,11 +12,13 @@ export default function MentionsLegales() {
 
       <h2>Éditeur du site</h2>
       <p>
-        Le site et l'application Kolo sont édités par [Raison sociale à compléter], [forme
-        juridique], au capital de [montant] €, immatriculée au RCS de [ville] sous le numéro
-        [SIRET], dont le siège social est situé [adresse].
+        Le site et l'application Kolo sont édités par LiAfrik, société opérant depuis Dubaï
+        (Émirats arabes unis) et l'Afrique. Forme juridique, numéro d'immatriculation et adresse
+        complète du siège : [à compléter].
         <br />
         Directeur de la publication : [nom].
+        <br />
+        Site : <a href="https://www.liafrik.com" target="_blank" rel="noopener noreferrer">www.liafrik.com</a>
         <br />
         Contact : contact@kolo.app
       </p>

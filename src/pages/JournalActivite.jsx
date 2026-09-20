@@ -69,7 +69,7 @@ export default function JournalActivite() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-sm font-medium">{meta.label}</span>
-                    <span className="text-xs text-muted-foreground">{formatDateTime(log.created_date)}</span>
+                    <span className="text-xs text-muted-foreground">{formatDateTime(log.created_at)}</span>
                   </div>
                   <div className="text-sm text-muted-foreground truncate">{log.target || "—"}</div>
                   <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
