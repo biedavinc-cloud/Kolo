@@ -1,4 +1,4 @@
-import { db } from "@/api/client";
+import { createCheckoutSession } from "@/api/client";
 import { useState } from "react";
 
 import { useToast } from "@/components/ui/use-toast";
@@ -20,12 +20,9 @@ export function useCheckoutPlan() {
     }
     setSelecting(plan.id);
     try {
-      const res = await db.functions.invoke("stripeCheckout", {
-        plan: plan.id,
-        origin: window.location.origin,
-      });
-      if (!res.data?.url) throw new Error("URL de paiement manquante");
-      window.location.href = res.data.url;
+      const res = await createCheckoutSession(plan.id);
+      if (!res?.url) throw new Error("URL de paiement manquante");
+      window.location.href = res.url;
     } catch (e) {
       toast({ title: "Paiement impossible", description: e.message, variant: "destructive" });
     } finally {

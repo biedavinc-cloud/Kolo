@@ -1,14 +1,13 @@
-import { db } from "@/api/client";
+import { sendHouseholdInvite } from "@/api/client";
 import React, { useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { useHousehold } from "@/lib/useHousehold";
-import { useIsSuperAdmin, SUPER_ADMIN_EMAILS } from "@/lib/superAdmins";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Copy, Mail, Loader2, Check, UserPlus, ShieldCheck } from "lucide-react";
+import { Copy, Mail, Loader2, Check, UserPlus } from "lucide-react";
 
 export default function InvitationCard() {
   const { user } = useAuth();
@@ -16,13 +15,13 @@ export default function InvitationCard() {
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("user");
-  const [inviting, setInviting] = useState(false);
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const canInvite = useIsSuperAdmin(user);
-  const inviteCode = household?.id || "";
+  // Tout membre du foyer peut partager le code — ce n'est pas une action
+  // sensible, et ce n'est pas réservé aux super administrateurs de la
+  // plateforme (une confusion distincte du rôle "administrateur du foyer").
+  const inviteCode = household?.invite_code || "";
 
   const copyCode = async () => {
     try {
@@ -35,73 +34,28 @@ export default function InvitationCard() {
     }
   };
 
-  // Accorde l'accès à l'application (invitation officielle)
-  const inviteToApp = async (e) => {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setInviting(true);
-    try {
-      await db.users.inviteUser(email.trim(), role);
-      toast({
-        title: "Accès accordé",
-        description: `${email.trim()} a été invité sur Kolo.`,
-      });
-      setEmail("");
-    } catch (err) {
-      toast({
-        title: "Invitation impossible",
-        description: err.message || "Vérifiez que votre compte a le rôle administrateur.",
-        variant: "destructive",
-      });
-    } finally {
-      setInviting(false);
-    }
-  };
-
-  // Envoie le code du foyer par email (fonction backend sendInvite)
   const sendCodeEmail = async (e) => {
     e.preventDefault();
     if (!email.trim() || !household) return;
     setSending(true);
     try {
-      await db.functions.invoke("sendInvite", {
+      await sendHouseholdInvite({
         to: email.trim(),
         householdName: household.name,
         inviteCode,
       });
       toast({ title: "Email envoyé", description: email.trim() });
+      setEmail("");
     } catch (err) {
       toast({
         title: "Envoi impossible",
-        description:
-          "L'email n'a pu être envoyé (destinataire non inscrit ou domaine personnalisé requis).",
+        description: err.message || "L'email n'a pu être envoyé.",
         variant: "destructive",
       });
     } finally {
       setSending(false);
     }
   };
-
-  if (!canInvite) {
-    return (
-      <div className="rounded-lg border border-border bg-surface p-4 space-y-2">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4" /> Invitations
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          Seuls les super administrateurs peuvent donner accès à la plateforme et inviter de
-          nouveaux membres :{" "}
-          {SUPER_ADMIN_EMAILS.map((e, i) => (
-            <span key={e} className="font-medium text-foreground">
-              {e}
-              {i < SUPER_ADMIN_EMAILS.length - 1 ? ", " : ""}
-            </span>
-          ))}
-          .
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="rounded-lg border border-border bg-surface p-4 space-y-4">
@@ -113,50 +67,37 @@ export default function InvitationCard() {
         <Label className="text-xs uppercase text-muted-foreground">Code du foyer</Label>
         <div className="flex gap-2">
           <Input value={inviteCode} readOnly className="font-mono-nums text-sm" />
-          <Button type="button" variant="outline" onClick={copyCode} className="h-9">
+          <Button type="button" variant="outline" onClick={copyCode} className="h-9" disabled={!inviteCode}>
             {copied ? <Check className="h-4 w-4 text-income" /> : <Copy className="h-4 w-4" />}
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Le membre le saisit à l'inscription pour rejoindre le foyer.
+          Le membre saisit ce code à l'inscription pour rejoindre le foyer. Vous pourrez ajuster
+          son rôle ensuite depuis « Gestion des membres ».
         </p>
       </div>
 
-      <form onSubmit={inviteToApp} className="space-y-2">
-        <Label className="text-xs uppercase text-muted-foreground">Inviter sur l'application</Label>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="relative flex-1">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@famille.com"
-              className="pl-9"
-            />
-          </div>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="h-9 rounded-md border border-input bg-surface px-3 text-sm"
-          >
-            <option value="user">Utilisateur</option>
-            <option value="admin">Administrateur</option>
-          </select>
-          <Button type="submit" disabled={inviting} className="h-9 bg-primary text-primary-foreground hover:bg-primary/90">
-            {inviting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            Accorder l'accès
-          </Button>
+      <form onSubmit={sendCodeEmail} className="space-y-2">
+        <Label className="text-xs uppercase text-muted-foreground">Envoyer le code par email</Label>
+        <div className="relative">
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="email@famille.com"
+            className="pl-9"
+          />
         </div>
-        <button
-          type="button"
-          onClick={sendCodeEmail}
+        <Button
+          type="submit"
           disabled={sending || !email.trim()}
-          className="text-xs text-primary hover:underline disabled:opacity-50 disabled:no-underline"
+          className="h-9 w-full bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto"
         >
-          {sending ? "Envoi en cours…" : "Envoyer aussi le code du foyer par email"}
-        </button>
+          {sending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          {sending ? "Envoi en cours…" : "Envoyer l'invitation"}
+        </Button>
       </form>
     </div>
   );

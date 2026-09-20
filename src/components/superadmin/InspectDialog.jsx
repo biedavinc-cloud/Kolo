@@ -1,4 +1,4 @@
-import { db } from "@/api/client";
+import { superAdminApi } from "@/api/client";
 import React, { useEffect, useState } from "react";
 
 import {
@@ -19,10 +19,10 @@ export default function InspectDialog({ tenant, onClose }) {
     if (!tenant) return;
     setLoading(true);
     setData(null);
-    db.functions
-      .invoke("superAdminAction", { action: "inspect_household", household_id: tenant.id })
-      .then((res) => setData(res.data))
-      .catch((e) => setData({ error: e.response?.data?.error || e.message }))
+    superAdminApi
+      .action({ action: "inspect_household", household_id: tenant.id })
+      .then((res) => setData(res))
+      .catch((e) => setData({ error: e.message }))
       .finally(() => setLoading(false));
   }, [tenant]);
 

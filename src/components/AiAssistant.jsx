@@ -1,4 +1,4 @@
-import { db } from "@/api/client";
+import { askAiAssistant } from "@/api/client";
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
@@ -82,14 +82,14 @@ export default function AiAssistant() {
     setMessages(next);
     setLoading(true);
     try {
-      const res = await db.functions.invoke("koloAssistant", {
+      const res = await askAiAssistant({
         message,
         context,
         history: next.slice(-6).map((m) => ({ role: m.role, content: m.content })),
       });
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: res.data?.reply || "Je n'ai pas pu générer de réponse." },
+        { role: "assistant", content: res?.reply || "Je n'ai pas pu générer de réponse." },
       ]);
     } catch (err) {
       setMessages((m) => [

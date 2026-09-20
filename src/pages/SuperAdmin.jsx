@@ -1,4 +1,4 @@
-import { db } from "@/api/client";
+import { superAdminApi } from "@/api/client";
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/AuthContext";
@@ -52,7 +52,7 @@ export default function SuperAdmin() {
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["superAdminDashboard"],
-    queryFn: async () => (await db.functions.invoke("superAdminDashboard", {})).data,
+    queryFn: () => superAdminApi.dashboard(),
     enabled: isSuper,
     refetchInterval: 60000,
   });
@@ -72,7 +72,7 @@ export default function SuperAdmin() {
   const act = async (payload, okMsg) => {
     setBusy(true);
     try {
-      await db.functions.invoke("superAdminAction", payload);
+      await superAdminApi.action(payload);
       await refetch();
       qc.invalidateQueries({ queryKey: ["platformSettings"] });
       if (okMsg) toast({ title: okMsg });
@@ -80,7 +80,7 @@ export default function SuperAdmin() {
     } catch (err) {
       toast({
         title: "Action impossible",
-        description: err.response?.data?.error || err.message,
+        description: err.message,
         variant: "destructive",
       });
       return false;

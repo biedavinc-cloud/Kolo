@@ -160,7 +160,7 @@ export const db = {
       setToken(null);
     },
     redirectToLogin: () => {
-      window.location.href = '/Login';
+      window.location.href = '/login';
     },
     setToken,
     resetPasswordRequest: (email) => request('/api/auth/reset-password-request', { method: 'POST', body: { email } }),
@@ -194,8 +194,10 @@ export default db;
 export const getExchangeRates = () => request('/api/exchange-rates');
 export const sendHouseholdInvite = (payload) => request('/api/invite', { method: 'POST', body: payload });
 export const createCheckoutSession = (plan) => request('/api/checkout/create', { method: 'POST', body: { plan } });
+export const askAiAssistant = (payload) => request('/api/ai-assistant', { method: 'POST', body: payload });
 export const superAdminApi = {
   dashboard: () => request('/api/superadmin/dashboard'),
+  action: (payload) => request('/api/superadmin/action', { method: 'POST', body: payload }),
   households: () => request('/api/superadmin/households'),
   suspendHousehold: (id, suspended) =>
     request(`/api/superadmin/households/${id}/suspend`, { method: 'POST', body: { suspended } }),

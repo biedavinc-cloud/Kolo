@@ -1,8 +1,9 @@
-import { db } from "@/api/client";
+import { getExchangeRates } from "@/api/client";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { setCurrencyContext } from "@/lib/format";
+import { db } from "@/api/client";
 
 // Multi-devises : devise d'affichage personnelle de l'utilisateur + taux de
 // change temps réel (base USD, rafraîchis une fois par jour). Tant que les
@@ -13,8 +14,8 @@ export function useCurrencyEnv(user, household) {
   const { data: rates = null } = useQuery({
     queryKey: ["exchangeRates"],
     queryFn: async () => {
-      const res = await db.functions.invoke("exchangeRates", {});
-      return res.data?.rates || null;
+      const res = await getExchangeRates();
+      return res?.rates || null;
     },
     staleTime: 24 * 60 * 60 * 1000,
     retry: 1,

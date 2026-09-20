@@ -274,6 +274,21 @@ app.post('/household/join', requireAuth, async (c) => {
   const { rows } = await query('select * from households where invite_code = $1', [invite_code.toUpperCase()]);
   if (!rows[0]) return c.json({ error: 'Code invalide' }, 404);
   if (rows[0].suspended) return c.json({ error: 'Ce foyer est suspendu' }, 403);
+
+  const plan = await effectivePlan(query, rows[0].id);
+  const memberLimit = PLAN_LIMITS[plan]?.members;
+  if (memberLimit !== null && memberLimit !== undefined) {
+    const { rows: countRows } = await query('select count(*)::int as count from users where household_id = $1', [
+      rows[0].id,
+    ]);
+    if (countRows[0].count >= memberLimit) {
+      return c.json(
+        { error: `Ce foyer a atteint sa limite de ${memberLimit} membre(s) pour son plan actuel.` },
+        403
+      );
+    }
+  }
+
   await query('update users set household_id = $1 where id = $2', [rows[0].id, user.sub]);
   const token = await reissueToken(c, query, user.sub);
   return c.json({ ...rows[0], token });
@@ -457,6 +472,26 @@ entities.post('/:entity', async (c) => {
   if (cfg.householdScoped && !user.household_id) {
     return c.json({ error: 'Aucun foyer associé à ce compte' }, 403);
   }
+
+  // Application côté serveur des limites du plan (le contrôle client peut
+  // être contourné — celui-ci ne peut pas, il ne dépend que du JWT vérifié
+  // et du compte réel en base).
+  if (cfg.table === 'accounts') {
+    const plan = await effectivePlan(query, user.household_id);
+    const limit = PLAN_LIMITS[plan]?.accounts;
+    if (limit !== null && limit !== undefined) {
+      const { rows: countRows } = await query('select count(*)::int as count from accounts where household_id = $1', [
+        user.household_id,
+      ]);
+      if (countRows[0].count >= limit) {
+        return c.json(
+          { error: `Votre plan (${plan}) autorise ${limit} compte(s) au maximum. Passez à un plan supérieur.` },
+          403
+        );
+      }
+    }
+  }
+
   const body = (await c.req.json().catch(() => ({}))) || {};
   const { cols, placeholders, values } = buildInsert(cfg, user, body);
   const { rows } = await query(
@@ -546,6 +581,29 @@ app.route('/entities', entities);
 // --- superadmin --------------------------------------------------------
 
 const PLAN_PRICES = { starter: 3, pro: 14, premium: 39, family: 89 };
+const PLAN_LIMITS = {
+  starter: { accounts: 1, members: 1 },
+  pro: { accounts: 3, members: 5 },
+  premium: { accounts: 10, members: 10 },
+  family: { accounts: null, members: 20 },
+};
+const PLAN_AI_ENABLED = { starter: false, pro: true, premium: true, family: true };
+
+// Abonnement effectif d'un foyer : essai gratuit (accès complet, comme
+// premium) tant qu'il n'a pas expiré, sinon le plan souscrit (starter par
+// défaut) — même logique que useSubscription.js côté client, dupliquée ici
+// car c'est le serveur qui doit faire foi pour appliquer les limites.
+async function effectivePlan(query, householdId) {
+  const { rows } = await query('select plan, status, trial_end from subscriptions where household_id = $1', [
+    householdId,
+  ]);
+  const sub = rows[0];
+  if (!sub) return 'premium'; // pas encore de ligne subscription -> essai gratuit par défaut
+  const today = new Date().toISOString().slice(0, 10);
+  const isTrialActive = sub.status === 'trial' && (!sub.trial_end || sub.trial_end >= today);
+  if (isTrialActive) return 'premium';
+  return sub.plan || 'starter';
+}
 
 async function writeAudit(query, user, action, target, details) {
   await query('insert into audit_logs (action, actor_email, target, details) values ($1, $2, $3, $4)', [
@@ -561,20 +619,188 @@ superadmin.use('*', requireAuth, requireSuperAdmin);
 
 superadmin.get('/dashboard', async (c) => {
   const query = c.get('query');
-  const [{ rows: householdsCount }, { rows: subs }, { rows: settings }, { rows: audit }] = await Promise.all([
-    query('select count(*)::int as count from households'),
-    query('select plan, status, count(*)::int as count from subscriptions group by plan, status'),
+  const [
+    { rows: tenants },
+    { rows: users },
+    { rows: settingsRows },
+    { rows: audit },
+    { rows: announcements },
+    { rows: kpiRows },
+    { rows: mrrByPlanRows },
+  ] = await Promise.all([
+    query(`
+      select h.id, h.name, h.currency, h.suspended, h.created_at as created_date,
+             owner.email as owner_email,
+             s.plan, s.status, s.trial_end, s.period_end,
+             (select count(*)::int from accounts a where a.household_id = h.id) as accounts,
+             (select count(*)::int from transactions t where t.household_id = h.id) as transactions
+      from households h
+      left join users owner on owner.id = h.created_by_id
+      left join subscriptions s on s.household_id = h.id
+      order by h.created_at desc
+      limit 500
+    `),
+    query(`
+      select id, email, full_name, role, household_id, created_at as created_date
+      from users order by created_at desc limit 1000
+    `),
     query('select * from platform_settings order by updated_at desc limit 1'),
     query('select * from audit_logs order by created_at desc limit 50'),
+    query('select * from announcements order by created_at desc limit 20'),
+    query(`
+      select
+        (select count(*)::int from households) as households_total,
+        (select count(*)::int from households where not suspended) as households_active,
+        (select count(*)::int from households where suspended) as households_suspended,
+        (select count(*)::int from subscriptions where status = 'active') as subscriptions_active,
+        (select count(*)::int from subscriptions where status = 'trial') as subscriptions_trial,
+        (select count(*)::int from subscriptions where status = 'expired') as subscriptions_expired,
+        (select count(*)::int from super_admins) as super_admins
+    `),
+    query(`
+      select plan, count(*)::int as count from subscriptions where status = 'active' group by plan
+    `),
   ]);
-  const mrr = subs.reduce((sum, s) => (s.status !== 'active' ? sum : sum + (PLAN_PRICES[s.plan] || 0) * s.count), 0);
+
+  const kpis = kpiRows[0] || {};
+  const mrr_by_plan = Object.fromEntries(
+    mrrByPlanRows.map((r) => [r.plan, (PLAN_PRICES[r.plan] || 0) * r.count])
+  );
+  kpis.mrr = Object.values(mrr_by_plan).reduce((s, v) => s + v, 0);
+
   return c.json({
-    households_count: householdsCount[0]?.count || 0,
-    subscriptions_by_plan_status: subs,
-    mrr_estimate_usd: mrr,
-    platform_settings: settings[0] || null,
-    recent_audit: audit,
+    kpis,
+    tenants: tenants.map((t) => ({ ...t, status: t.suspended ? 'suspended' : t.status || 'trial' })),
+    users,
+    settings: settingsRows[0] || null,
+    audit,
+    announcements,
+    mrr_by_plan,
   });
+});
+
+// Dispatcher générique d'actions sensibles (miroir de l'ancien
+// `superAdminAction` base44) — regroupe suspend/unsuspend, ajustement
+// d'abonnement, suppression de foyer, diffusion, feature flags et
+// inspection en lecture seule d'un foyer.
+superadmin.post('/action', async (c) => {
+  const query = c.get('query');
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const { action } = body || {};
+
+  switch (action) {
+    case 'suspend_household':
+    case 'unsuspend_household': {
+      const suspended = action === 'suspend_household';
+      const { rows } = await query('update households set suspended = $1 where id = $2 returning *', [
+        suspended,
+        body.household_id,
+      ]);
+      if (!rows[0]) return c.json({ error: 'Foyer introuvable' }, 404);
+      await writeAudit(query, user, suspended ? 'household.suspend' : 'household.unsuspend', body.household_id);
+      return c.json(rows[0]);
+    }
+
+    case 'adjust_subscription': {
+      const { household_id, plan, status } = body;
+      const { rows } = await query(
+        `insert into subscriptions (household_id, plan, status) values ($1, $2, $3)
+         on conflict (household_id) do update set plan = coalesce($2, subscriptions.plan), status = coalesce($3, subscriptions.status)
+         returning *`,
+        [household_id, plan || null, status || null]
+      );
+      await writeAudit(query, user, 'subscription.adjust', household_id, { plan, status });
+      return c.json(rows[0]);
+    }
+
+    case 'delete_household': {
+      const { household_id } = body;
+      const { rows } = await query('delete from households where id = $1 returning id, name', [household_id]);
+      if (!rows[0]) return c.json({ error: 'Foyer introuvable' }, 404);
+      await writeAudit(query, user, 'household.delete', household_id, { name: rows[0].name });
+      return c.json({ ok: true });
+    }
+
+    case 'broadcast': {
+      const { title, message } = body;
+      if (!title?.trim() || !message?.trim()) return c.json({ error: 'Titre et message requis' }, 400);
+      const { rows } = await query(
+        'insert into announcements (title, message, created_by) values ($1, $2, $3) returning *',
+        [title.trim(), message.trim(), user.email]
+      );
+      await writeAudit(query, user, 'announcement.broadcast', null, { title });
+      return c.json(rows[0], 201);
+    }
+
+    case 'set_maintenance':
+    case 'set_flag': {
+      const { rows: existing } = await query('select id from platform_settings order by updated_at desc limit 1');
+      const patch =
+        action === 'set_maintenance'
+          ? { maintenance_mode: !!body.value }
+          : { [body.flag]: !!body.value };
+      let row;
+      if (existing[0]) {
+        const { rows } = await query(
+          `update platform_settings set
+             maintenance_mode = coalesce($1, maintenance_mode),
+             flag_ai_assistant = coalesce($2, flag_ai_assistant),
+             flag_rapports_avances = coalesce($3, flag_rapports_avances),
+             updated_by = $4
+           where id = $5 returning *`,
+          [patch.maintenance_mode, patch.flag_ai_assistant, patch.flag_rapports_avances, user.email, existing[0].id]
+        );
+        row = rows[0];
+      } else {
+        const { rows } = await query(
+          `insert into platform_settings (maintenance_mode, flag_ai_assistant, flag_rapports_avances, updated_by)
+           values ($1, $2, $3, $4) returning *`,
+          [
+            !!patch.maintenance_mode,
+            patch.flag_ai_assistant !== false,
+            patch.flag_rapports_avances !== false,
+            user.email,
+          ]
+        );
+        row = rows[0];
+      }
+      await writeAudit(query, user, `platform_settings.${action}`, null, patch);
+      return c.json(row);
+    }
+
+    case 'inspect_household': {
+      const { household_id } = body;
+      const [{ rows: households }, { rows: subs }, { rows: accounts }, { rows: transactions }, { rows: budgets }] =
+        await Promise.all([
+          query('select id, name, currency, suspended, created_at as created_date from households where id = $1', [
+            household_id,
+          ]),
+          query('select plan, status from subscriptions where household_id = $1', [household_id]),
+          query('select id, name, balance, currency from accounts where household_id = $1 order by created_at', [
+            household_id,
+          ]),
+          query(
+            'select id, amount, type, date, notes from transactions where household_id = $1 order by date desc limit 20',
+            [household_id]
+          ),
+          query('select id, month_year, amount_limit from budgets where household_id = $1 order by month_year desc', [
+            household_id,
+          ]),
+        ]);
+      if (!households[0]) return c.json({ error: 'Foyer introuvable' }, 404);
+      return c.json({
+        household: households[0],
+        subscription: subs[0] || null,
+        accounts,
+        transactions,
+        budgets,
+      });
+    }
+
+    default:
+      return c.json({ error: `Action inconnue : ${action}` }, 400);
+  }
 });
 
 superadmin.get('/households', async (c) => {
@@ -701,6 +927,12 @@ app.post('/uploads', requireAuth, async (c) =>
 app.post('/ai-assistant', requireAuth, async (c) => {
   if (!c.env.ANTHROPIC_API_KEY) {
     return c.json({ error: 'Assistant IA non configuré (ANTHROPIC_API_KEY manquant).' }, 501);
+  }
+  const query = c.get('query');
+  const user = c.get('user');
+  const plan = user.household_id ? await effectivePlan(query, user.household_id) : 'starter';
+  if (!PLAN_AI_ENABLED[plan]) {
+    return c.json({ error: "L'assistant IA n'est pas inclus dans votre plan actuel." }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
   const message = String(body?.message || '').slice(0, 1000);
