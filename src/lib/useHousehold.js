@@ -41,17 +41,14 @@ export function useHousehold(user) {
 
 // Crée un foyer et rattache l'utilisateur courant
 export async function createHousehold(name, currency) {
-  const h = await db.entities.Household.create({ name, currency, invite_code: "" });
-  await db.auth.updateMe({ household_id: h.id });
+  const h = await db.entities.Household.create({ name, currency });
   await db.entities.Category.bulkCreate(
     DEFAULT_CATEGORIES.map((c) => ({ ...c, household_id: h.id }))
   );
   return h;
 }
 
-// Rejoint un foyer existant via son id/code
+// Rejoint un foyer existant via son code d'invitation
 export async function joinHousehold(code) {
-  const h = await db.entities.Household.get(code.trim());
-  await db.auth.updateMe({ household_id: h.id });
-  return h;
+  return db.entities.Household.join(code.trim());
 }

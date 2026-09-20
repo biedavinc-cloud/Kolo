@@ -1,3 +1,4 @@
+import { superAdminApi } from "@/api/client";
 import { db } from "@/api/client";
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -43,18 +44,14 @@ export default function StaffTab() {
     if (!email.trim()) return;
     setBusy(true);
     try {
-      await db.functions.invoke("manageSuperAdmins", {
-        action: "add",
-        email: email.trim(),
-        role,
-      });
+      await superAdminApi.addTeamMember(email.trim(), role);
       await qc.invalidateQueries({ queryKey: ["superAdmins"] });
       toast({ title: "Collaborateur ajouté", description: `${email.trim()} — ${DELEGATED_ROLES[role].label}` });
       setEmail("");
     } catch (err) {
       toast({
         title: "Ajout impossible",
-        description: err.response?.data?.error || err.message,
+        description: err.message,
         variant: "destructive",
       });
     } finally {
@@ -66,17 +63,15 @@ export default function StaffTab() {
     if (newRole === (rec.role || "admin")) return;
     setBusy(true);
     try {
-      await db.functions.invoke("manageSuperAdmins", {
-        action: "set_role",
-        id: rec.id,
-        role: newRole,
-      });
+      // Le serveur fait un upsert sur l'email : ajouter à nouveau avec le
+      // nouveau rôle a le même effet qu'un changement de rôle dédié.
+      await superAdminApi.addTeamMember(rec.email, newRole);
       await qc.invalidateQueries({ queryKey: ["superAdmins"] });
       toast({ title: "Rôle mis à jour", description: `${rec.email} → ${DELEGATED_ROLES[newRole].label}` });
     } catch (err) {
       toast({
         title: "Modification impossible",
-        description: err.response?.data?.error || err.message,
+        description: err.message,
         variant: "destructive",
       });
     } finally {
@@ -87,13 +82,13 @@ export default function StaffTab() {
   const remove = async (rec) => {
     setBusy(true);
     try {
-      await db.functions.invoke("manageSuperAdmins", { action: "remove", id: rec.id });
+      await superAdminApi.removeTeamMember(rec.email);
       await qc.invalidateQueries({ queryKey: ["superAdmins"] });
       toast({ title: "Accès révoqué", description: rec.email });
     } catch (err) {
       toast({
         title: "Révocation impossible",
-        description: err.response?.data?.error || err.message,
+        description: err.message,
         variant: "destructive",
       });
     } finally {

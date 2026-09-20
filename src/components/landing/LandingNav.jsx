@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, ChevronDown, ArrowRight } from "lucide-react";
+import { Menu, ArrowRight } from "lucide-react";
 import { Image } from "@/components/ui/image";
 import { LOGO_URL } from "@/lib/branding";
 
@@ -20,21 +20,21 @@ export default function LandingNav() {
         <nav className="hidden items-center gap-1 text-sm font-medium text-slate-600 lg:flex">
           <a
             href="#features"
-            className="flex items-center gap-1 rounded-full px-3.5 py-2 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            className="rounded-full px-3.5 py-2 transition-colors hover:bg-slate-100 hover:text-slate-900"
           >
-            A propos <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            Fonctionnalités
           </a>
           <a
             href="#pricing"
-            className="flex items-center gap-1 rounded-full px-3.5 py-2 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            className="rounded-full px-3.5 py-2 transition-colors hover:bg-slate-100 hover:text-slate-900"
           >
-            Nos offres <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            Nos offres
           </a>
           <a
             href="#security"
             className="rounded-full px-3.5 py-2 transition-colors hover:bg-slate-100 hover:text-slate-900"
           >
-            Support
+            Sécurité
           </a>
         </nav>
 
@@ -63,7 +63,7 @@ export default function LandingNav() {
                   onClick={() => setOpen(false)}
                   className="rounded-full px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
                 >
-                  A propos
+                  Fonctionnalités
                 </a>
                 <a
                   href="#pricing"
@@ -77,7 +77,7 @@ export default function LandingNav() {
                   onClick={() => setOpen(false)}
                   className="rounded-full px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
                 >
-                  Support
+                  Sécurité
                 </a>
                 <div className="my-2 h-px bg-gray-100" />
                 <Link

@@ -85,7 +85,7 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
     await db.auth.logout();
     if (shouldRedirect) {
-      window.location.href = '/Login';
+      window.location.href = '/login';
     }
   };
 

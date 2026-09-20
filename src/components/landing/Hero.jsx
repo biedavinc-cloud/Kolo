@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import HeroPhones from "./HeroPhones";
-import QrCard from "./QrCard";
+import InstallCard from "./InstallCard";
 import JoinDialog from "./JoinDialog";
 
 // Hero conforme à la maquette Bankin' : dégradé bleu fourni par le conteneur
@@ -20,7 +20,7 @@ export default function Hero() {
         Tous les comptes de votre foyer, 1 seule app, 0 stress.
       </p>
 
-      <QrCard />
+      <InstallCard />
 
       <div className="mt-6 flex flex-col items-center justify-center gap-1.5 text-center sm:flex-row sm:gap-4">
         <Link

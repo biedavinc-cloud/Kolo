@@ -61,7 +61,10 @@ async function request(path, { method = 'GET', body, query } = {}) {
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(data?.error || `Erreur ${res.status}`);
+    const message = data?.error || `Erreur ${res.status}`;
+    const err = new Error(data?.detail ? `${message} (${data.detail})` : message);
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
@@ -84,9 +87,17 @@ function makeEntityClient(name) {
 // Household et User ont des routes dédiées côté serveur (portée spéciale).
 const householdClient = {
   get: () => request('/api/household'),
-  create: (data) => request('/api/household', { method: 'POST', body: data }),
+  create: async (data) => {
+    const res = await request('/api/household', { method: 'POST', body: data });
+    if (res?.token) setToken(res.token);
+    return res;
+  },
   update: (data) => request('/api/household', { method: 'PUT', body: data }),
-  join: (invite_code) => request('/api/household/join', { method: 'POST', body: { invite_code } }),
+  join: async (invite_code) => {
+    const res = await request('/api/household/join', { method: 'POST', body: { invite_code } });
+    if (res?.token) setToken(res.token);
+    return res;
+  },
 };
 
 const userClient = {
@@ -149,7 +160,7 @@ export const db = {
       setToken(null);
     },
     redirectToLogin: () => {
-      window.location.href = '/Login';
+      window.location.href = '/login';
     },
     setToken,
     resetPasswordRequest: (email) => request('/api/auth/reset-password-request', { method: 'POST', body: { email } }),
@@ -183,8 +194,10 @@ export default db;
 export const getExchangeRates = () => request('/api/exchange-rates');
 export const sendHouseholdInvite = (payload) => request('/api/invite', { method: 'POST', body: payload });
 export const createCheckoutSession = (plan) => request('/api/checkout/create', { method: 'POST', body: { plan } });
+export const askAiAssistant = (payload) => request('/api/ai-assistant', { method: 'POST', body: payload });
 export const superAdminApi = {
   dashboard: () => request('/api/superadmin/dashboard'),
+  action: (payload) => request('/api/superadmin/action', { method: 'POST', body: payload }),
   households: () => request('/api/superadmin/households'),
   suspendHousehold: (id, suspended) =>
     request(`/api/superadmin/households/${id}/suspend`, { method: 'POST', body: { suspended } }),
