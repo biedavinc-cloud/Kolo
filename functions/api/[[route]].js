@@ -78,28 +78,6 @@ app.get('/health/db', async (c) => {
 
 // --- auth ----------------------------------------------------------------
 
-// Best-effort rate limiting for auth endpoints: per-isolate in-memory counter
-// (Express had express-rate-limit; there's no KV/Durable Object bound here to
-// do this properly across the whole edge, so this only throttles bursts that
-// happen to land on the same warm isolate — better than nothing, not a real
-// substitute for one bound to Cloudflare KV/Durable Objects later).
-const authAttempts = new Map();
-function rateLimitAuth(c, next) {
-  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
-  const now = Date.now();
-  const windowMs = 15 * 60 * 1000;
-  const entry = authAttempts.get(ip);
-  if (entry && now - entry.start < windowMs) {
-    if (entry.count >= 20) {
-      return c.json({ error: 'Trop de tentatives, réessayez plus tard.' }, 429);
-    }
-    entry.count += 1;
-  } else {
-    authAttempts.set(ip, { start: now, count: 1 });
-  }
-  return next();
-}
-
 async function isSuperAdmin(query, email) {
   const { rows } = await query('select role from super_admins where email = $1', [email]);
   return rows[0]?.role || null;
@@ -109,7 +87,7 @@ async function loadUserPayload(query, userRow) {
   return { ...userRow, is_super_admin: !!superAdminRole, super_admin_role: superAdminRole };
 }
 
-app.post('/auth/register', rateLimitAuth, async (c) => {
+app.post('/auth/register', async (c) => {
   const query = c.get('query');
   const body = await c.req.json().catch(() => ({}));
   const { email, password, full_name } = body || {};
@@ -129,7 +107,7 @@ app.post('/auth/register', rateLimitAuth, async (c) => {
   return c.json({ token, user: publicUser(user) }, 201);
 });
 
-app.post('/auth/login', rateLimitAuth, async (c) => {
+app.post('/auth/login', async (c) => {
   const query = c.get('query');
   const body = await c.req.json().catch(() => ({}));
   const { email, password } = body || {};
@@ -155,7 +133,12 @@ app.get('/auth/me', requireAuth, async (c) => {
 app.put('/auth/me', requireAuth, async (c) => {
   const query = c.get('query');
   const body = (await c.req.json().catch(() => ({}))) || {};
-  const REAL_COLUMNS = ['full_name', 'household_id'];
+  // household_id n'est PAS éditable ici : changer de foyer doit passer par
+  // /household/join (code d'invitation vérifié + limite de membres du plan)
+  // ou /household (création). Le permettre ici laisserait n'importe quel
+  // utilisateur rejoindre n'importe quel foyer en devinant/envoyant un UUID,
+  // sans invitation ni contrôle de limite de plan.
+  const REAL_COLUMNS = ['full_name'];
 
   const columnUpdates = [];
   const values = [];
@@ -474,8 +457,27 @@ entities.post('/:entity/bulk', async (c) => {
   const query = c.get('query');
   const cfg = c.get('entityConfig');
   const user = c.get('user');
+  const entityName = c.req.param('entity');
+  if (cfg.householdScoped && !user.household_id) {
+    return c.json({ error: 'Aucun foyer associé à ce compte' }, 403);
+  }
   const body = await c.req.json().catch(() => []);
   const items = Array.isArray(body) ? body : [];
+  if (entityName === 'Account' && items.length) {
+    // Même contrôle que la création à l'unité : sans ça, /bulk contournait
+    // totalement la limite de comptes du plan (n'importe qui pouvait créer
+    // 100 comptes d'un coup via ce endpoint).
+    const { rows: countRows } = await query('select count(*)::int as count from accounts where household_id = $1', [
+      user.household_id,
+    ]);
+    const limit = planById((await getSubscriptionState(query, user.household_id)).plan).limits.accounts;
+    if (limit !== null && limit !== undefined && countRows[0].count + items.length > limit) {
+      return c.json(
+        { error: `Limite de ${limit} compte(s) atteinte pour votre plan. Passez à un plan supérieur pour en ajouter.`, code: 'plan_limit_reached' },
+        402
+      );
+    }
+  }
   const created = [];
   for (const item of items) {
     const { cols, placeholders, values } = buildInsert(cfg, user, item);
