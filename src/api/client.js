@@ -193,7 +193,9 @@ export default db;
 // --- Helpers additionnels utilisés directement par certaines pages ---
 export const getExchangeRates = () => request('/api/exchange-rates');
 export const sendHouseholdInvite = (payload) => request('/api/invite', { method: 'POST', body: payload });
-export const createCheckoutSession = (plan) => request('/api/checkout/create', { method: 'POST', body: { plan } });
+export const getCheckoutProviders = () => request('/api/checkout/providers');
+export const createCheckoutSession = (plan, provider) =>
+  request('/api/checkout/create', { method: 'POST', body: { plan, provider } });
 export const askAiAssistant = (payload) => request('/api/ai-assistant', { method: 'POST', body: payload });
 export const superAdminApi = {
   dashboard: () => request('/api/superadmin/dashboard'),

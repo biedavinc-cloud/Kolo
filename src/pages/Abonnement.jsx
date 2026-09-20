@@ -5,14 +5,15 @@ import { useCheckoutPlan } from "@/lib/useCheckout";
 import { getHouseholdId } from "@/lib/useHousehold";
 import { useQueryClient } from "@tanstack/react-query";
 import PricingPlans from "@/components/PricingPlans";
+import PaymentProviderDialog from "@/components/PaymentProviderDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { CreditCard, Sparkles, AlertTriangle } from "lucide-react";
 
-// Abonnement du foyer : sélection du plan puis paiement Stripe Checkout
+// Abonnement du foyer : sélection du plan puis paiement (multi-PSP)
 export default function Abonnement() {
   const { user } = useAuth();
   const { subscription, isTrial, isExpired, daysLeft, plan } = useSubscription(user);
-  const { start, selecting } = useCheckoutPlan();
+  const { start, selecting, providers, pendingPlan, chooseProvider, cancelProviderPick } = useCheckoutPlan();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -85,6 +86,14 @@ export default function Abonnement() {
       )}
 
       <PricingPlans currentPlan={subscription?.plan} onSelect={start} selecting={selecting} />
+
+      <PaymentProviderDialog
+        plan={pendingPlan}
+        providers={providers}
+        selecting={selecting}
+        onChoose={chooseProvider}
+        onClose={cancelProviderPick}
+      />
     </div>
   );
 }

@@ -1,36 +1,20 @@
 import { db } from "@/api/client";
-import React, { useState } from "react";
+import React from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/useSubscription";
+import { useCheckoutPlan } from "@/lib/useCheckout";
 
 import { Image } from "@/components/ui/image";
 import { LOGO_URL } from "@/lib/branding";
 import PricingPlans from "@/components/PricingPlans";
-import { useToast } from "@/components/ui/use-toast";
+import PaymentProviderDialog from "@/components/PaymentProviderDialog";
 
-// Écran affiché à la fin de l'essai gratuit : un plan est requis pour continuer
+// Écran affiché à la fin de l'essai gratuit : un vrai paiement est requis
+// pour continuer (voir useCheckoutPlan — redirige vers le PSP choisi).
 export default function Paywall() {
   const { user } = useAuth();
   const { subscription } = useSubscription(user);
-  const { toast } = useToast();
-  const [selecting, setSelecting] = useState(null);
-
-  const choose = async (p) => {
-    if (!subscription || subscription.plan === p.id) return;
-    setSelecting(p.id);
-    try {
-      await db.entities.Subscription.update(subscription.id, { plan: p.id });
-      toast({
-        title: `Plan ${p.name} sélectionné`,
-        description:
-          "L'accès complet est activé dès la finalisation du paiement par l'équipe Kolo.",
-      });
-    } catch (e) {
-      toast({ title: "Erreur", description: e.message, variant: "destructive" });
-    } finally {
-      setSelecting(null);
-    }
-  };
+  const { start, selecting, providers, pendingPlan, chooseProvider, cancelProviderPick } = useCheckoutPlan();
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-background px-4 py-12">
@@ -44,8 +28,16 @@ export default function Paywall() {
       </p>
 
       <div className="mt-8 w-full max-w-6xl">
-        <PricingPlans currentPlan={subscription?.plan} onSelect={choose} selecting={selecting} />
+        <PricingPlans currentPlan={subscription?.plan} onSelect={start} selecting={selecting} />
       </div>
+
+      <PaymentProviderDialog
+        plan={pendingPlan}
+        providers={providers}
+        selecting={selecting}
+        onChoose={chooseProvider}
+        onClose={cancelProviderPick}
+      />
 
       <button
         onClick={() => db.auth.logout()}

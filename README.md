@@ -88,11 +88,21 @@ Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
   - `ANTHROPIC_API_KEY` / `RESEND_API_KEY` / `EMAIL_FROM` (optionnels — assistant IA et
     emails d'invitation restent désactivés proprement, avec un message clair, tant que
     ces clés ne sont pas fournies)
-  - `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_STARTER` /
-    `STRIPE_PRICE_PRO` / `STRIPE_PRICE_PREMIUM` / `STRIPE_PRICE_FAMILY` (optionnels —
-    créez ces price IDs dans **votre propre** dashboard Stripe, en USD, avec les
-    montants de `shared/plans.js` ; ceux de `server/legacy-base44/` appartenaient au
-    compte Stripe de Base44 et ne fonctionneront pas)
+  - Paiement — 5 PSP supportés, chacun optionnel et indépendant (voir
+    `functions/api/_lib/psp/`). Un plan reste sélectionnable sans paiement configuré, mais
+    aucun moyen de paiement n'apparaît tant qu'aucune des clés ci-dessous n'est renseignée :
+    - **Stripe** : `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
+    - **Paystack** : `PAYSTACK_SECRET_KEY`, `PAYSTACK_CURRENCY` (optionnel, défaut `USD`)
+    - **Flutterwave** : `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_HASH`,
+      `FLUTTERWAVE_CURRENCY` (optionnel, défaut `USD`)
+    - **PayUnit** : `PAYUNIT_API_KEY`, `PAYUNIT_API_USER`, `PAYUNIT_API_PASSWORD`,
+      `PAYUNIT_MODE` (`test`|`live`), `PAYUNIT_CURRENCY` (optionnel, défaut `XAF`) — ⚠️
+      intégration non testée contre un vrai sandbox, à vérifier en priorité
+    - **Paddle** : `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_MODE` (`sandbox`|`live`)
+    - Webhooks à configurer chez chaque PSP vers
+      `https://<votre-domaine>/api/checkout/webhook/<stripe|paystack|flutterwave|payunit|paddle>`
+    - `FRONTEND_URL` (optionnel) — origine utilisée pour les URL de retour de paiement ;
+      sinon déduite de la requête entrante
 - `public/_redirects` (`/* /index.html 200`) gère déjà le routage React Router côté
   client sur Cloudflare Pages.
 
@@ -100,7 +110,7 @@ Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
 
 - Prix des 4 plans (Starter/Pro/Premium/Family) en **USD**, définis une seule fois dans
   `shared/plans.js` et réutilisés à l'identique par le frontend (affichage) et le
-  backend (facturation Stripe, calcul du MRR) — aucune duplication, donc aucun risque
+  backend (facturation, calcul du MRR) — aucune duplication, donc aucun risque
   de désynchronisation entre ce qui est affiché et ce qui est réellement facturé/appliqué.
 - Les limites par plan (nombre de comptes bancaires, de membres du foyer, accès à
   l'assistant IA) sont **appliquées côté serveur** : dépasser la limite d'un plan, ou
@@ -108,10 +118,16 @@ Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
   erreur 402 explicite — ce n'est plus seulement une restriction d'affichage
   contournable en appelant l'API directement.
 
-### Ce qui n'est toujours pas configuré par défaut
+### Ce qui n'est toujours pas configuré/vérifié par défaut
 
+- **Paiement** : intégrations Stripe/Paystack/Flutterwave/Paddle écrites contre l'API
+  REST documentée de chaque fournisseur, mais **non testées contre un vrai
+  sandbox** (aucune clé disponible pendant le développement, et ces domaines ne sont
+  pas joignables depuis l'environnement où ce code a été écrit). PayUnit en particulier
+  est peu documenté publiquement — à vérifier en priorité. Tester chaque PSP en mode
+  test avant d'activer ses clés en production.
 - Connexion Google/Apple : nécessite des identifiants OAuth réels côté Google/Apple.
-- Assistant IA, emails d'invitation, paiements Stripe : fonctionnels dès que les
-  clés/secrets correspondants sont renseignés (voir ci-dessus) ; sinon, désactivés
-  proprement avec un message clair plutôt qu'une erreur opaque.
+- Assistant IA, emails d'invitation : fonctionnels dès que les clés/secrets
+  correspondants sont renseignés (voir ci-dessus) ; sinon, désactivés proprement avec un
+  message clair plutôt qu'une erreur opaque.
 
