@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { makeQuery } from './_lib/db.js';
 import { hashPassword, verifyPassword, signToken, verifyToken, publicUser } from './_lib/auth.js';
 import { ENTITIES } from './_lib/entities.config.js';
+import { getSubscriptionState, requireActiveSubscription, checkPlanLimit } from './_lib/subscription.js';
+import { PLANS, planById } from '../../shared/plans.js';
 
 const app = new Hono().basePath('/api');
 
@@ -27,6 +29,18 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+// Rate limiting sur les routes d'authentification (login/register/reset) —
+// sans ça, le login est brute-forçable sans limite. Utilise le binding natif
+// Cloudflare (voir wrangler.toml) plutôt qu'un compteur en mémoire, qui
+// n'aurait aucun sens réparti entre isolates.
+app.use('/auth/*', async (c, next) => {
+  if (!c.env.AUTH_RATE_LIMITER) return next(); // binding absent (ex: build sans wrangler.toml) : laisse passer
+  const key = c.req.header('cf-connecting-ip') || 'unknown';
+  const { success } = await c.env.AUTH_RATE_LIMITER.limit({ key });
+  if (!success) return c.json({ error: 'Trop de tentatives, réessayez plus tard.' }, 429);
+  await next();
+});
+
 function requireAuth(c, next) {
   if (!c.get('user')) return c.json({ error: 'Non autorisé' }, 401);
   return next();
@@ -46,7 +60,8 @@ app.get('/health/db', async (c) => {
     await query('select 1', []);
     return c.json({ ok: true, db: 'connected' });
   } catch (err) {
-    return c.json({ ok: false, db: 'unreachable', detail: `${err.name}: ${err.message}` }, 500);
+    console.error('[health/db]', err);
+    return c.json({ ok: false, db: 'unreachable' }, 500);
   }
 });
 
@@ -223,6 +238,19 @@ app.post('/household/join', requireAuth, async (c) => {
   const { rows } = await query('select * from households where invite_code = $1', [invite_code.toUpperCase()]);
   if (!rows[0]) return c.json({ error: 'Code invalide' }, 404);
   if (rows[0].suspended) return c.json({ error: 'Ce foyer est suspendu' }, 403);
+  const limitCheck = await checkPlanLimit(
+    query,
+    rows[0].id,
+    'members',
+    'select count(*)::int as count from users where household_id = $1',
+    [rows[0].id]
+  );
+  if (!limitCheck.ok) {
+    return c.json(
+      { error: `Ce foyer a atteint sa limite de ${limitCheck.limit} membre(s) pour son plan.`, code: 'plan_limit_reached' },
+      402
+    );
+  }
   await query('update users set household_id = $1 where id = $2', [rows[0].id, user.sub]);
   return c.json(rows[0]);
 });
@@ -326,6 +354,8 @@ const entities = new Hono();
 entities.use('*', requireAuth);
 entities.use('/:entity/*', getEntityConfig);
 entities.use('/:entity', getEntityConfig);
+entities.use('/:entity/*', (c, next) => requireActiveSubscription(c.get('entityConfig'))(c, next));
+entities.use('/:entity', (c, next) => requireActiveSubscription(c.get('entityConfig'))(c, next));
 
 entities.get('/:entity', async (c) => {
   const query = c.get('query');
@@ -402,8 +432,24 @@ entities.post('/:entity', async (c) => {
   const query = c.get('query');
   const cfg = c.get('entityConfig');
   const user = c.get('user');
+  const entityName = c.req.param('entity');
   if (cfg.householdScoped && !user.household_id) {
     return c.json({ error: 'Aucun foyer associé à ce compte' }, 403);
+  }
+  if (entityName === 'Account') {
+    const limitCheck = await checkPlanLimit(
+      query,
+      user.household_id,
+      'accounts',
+      'select count(*)::int as count from accounts where household_id = $1',
+      [user.household_id]
+    );
+    if (!limitCheck.ok) {
+      return c.json(
+        { error: `Limite de ${limitCheck.limit} compte(s) atteinte pour votre plan. Passez à un plan supérieur pour en ajouter.`, code: 'plan_limit_reached' },
+        402
+      );
+    }
   }
   const body = (await c.req.json().catch(() => ({}))) || {};
   const { cols, placeholders, values } = buildInsert(cfg, user, body);
@@ -493,7 +539,7 @@ app.route('/entities', entities);
 
 // --- superadmin --------------------------------------------------------
 
-const PLAN_PRICES = { starter: 3, pro: 14, premium: 39, family: 89 };
+const PLAN_PRICES = Object.fromEntries(PLANS.map((p) => [p.id, p.price]));
 
 async function writeAudit(query, user, action, target, details) {
   await query('insert into audit_logs (action, actor_email, target, details) values ($1, $2, $3, $4)', [
@@ -552,6 +598,12 @@ superadmin.put('/households/:id/subscription', async (c) => {
   const query = c.get('query');
   const body = await c.req.json().catch(() => ({}));
   const { plan, status } = body || {};
+  if (plan && !PLANS.some((p) => p.id === plan)) {
+    return c.json({ error: `Plan inconnu : ${plan}` }, 400);
+  }
+  if (status && !['trial', 'active', 'expired'].includes(status)) {
+    return c.json({ error: `Statut inconnu : ${status}` }, 400);
+  }
   const id = c.req.param('id');
   const { rows } = await query(
     `insert into subscriptions (household_id, plan, status) values ($1, $2, $3)
@@ -640,15 +692,59 @@ app.get('/exchange-rates', async (c) => {
   return c.json({ base: 'USD', rates: data.rates, updated_at: data.time_last_update_utc || null });
 });
 
-// File storage needs an object store in this runtime (no local disk in
-// Workers) — wire up a Cloudflare R2 bucket binding to enable this.
-app.post('/uploads', requireAuth, async (c) =>
-  c.json({ error: "L'envoi de fichiers n'est pas encore configuré (bucket R2 requis)." }, 501)
-);
+// N'accepte que des types de fichiers sûrs pour des reçus/avatars — empêche
+// l'upload de HTML/SVG/scripts qui pourraient être servis et exécutés depuis
+// /uploads (XSS stocké).
+const ALLOWED_UPLOAD_MIME = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+  'application/pdf': '.pdf',
+};
+
+app.post('/uploads', requireAuth, async (c) => {
+  if (!c.env.UPLOADS) {
+    return c.json({ error: "L'envoi de fichiers n'est pas encore configuré (bucket R2 requis)." }, 501);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const { data_url } = body || {};
+  if (!data_url || !data_url.startsWith('data:')) {
+    return c.json({ error: 'data_url (base64) requis' }, 400);
+  }
+  const [, meta, b64] = data_url.match(/^data:(.+);base64,(.+)$/) || [];
+  const mime = (meta || '').split(';')[0];
+  const ext = ALLOWED_UPLOAD_MIME[mime];
+  if (!b64 || !ext) {
+    return c.json({ error: 'Type de fichier non autorisé (image ou PDF uniquement)' }, 400);
+  }
+  const safeName = `${crypto.randomUUID()}${ext}`;
+  const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+  await c.env.UPLOADS.put(safeName, bytes, { httpMetadata: { contentType: mime } });
+  const base = c.env.BACKEND_PUBLIC_URL || new URL(c.req.url).origin;
+  return c.json({ file_url: `${base}/api/uploads/${safeName}` }, 201);
+});
+
+app.get('/uploads/:key', async (c) => {
+  if (!c.env.UPLOADS) return c.notFound();
+  const obj = await c.env.UPLOADS.get(c.req.param('key'));
+  if (!obj) return c.notFound();
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  headers.set('etag', obj.httpEtag);
+  headers.set('cache-control', 'public, max-age=31536000, immutable');
+  return new Response(obj.body, { headers });
+});
 
 app.post('/ai-assistant', requireAuth, async (c) => {
   if (!c.env.ANTHROPIC_API_KEY) {
     return c.json({ error: 'Assistant IA non configuré (ANTHROPIC_API_KEY manquant).' }, 501);
+  }
+  const user = c.get('user');
+  const query = c.get('query');
+  const { plan } = await getSubscriptionState(query, user.household_id);
+  if (!planById(plan).limits.ai) {
+    return c.json({ error: "L'assistant IA n'est pas inclus dans votre plan actuel.", code: 'plan_limit_reached' }, 402);
   }
   const body = await c.req.json().catch(() => ({}));
   const message = String(body?.message || '').slice(0, 1000);
@@ -691,20 +787,86 @@ app.post('/invite', requireAuth, async (c) => {
   return c.json({ ok: r.ok, delivered: r.ok });
 });
 
-// Stripe needs its Node SDK (not loaded here to keep the Worker bundle small
-// and avoid Node-runtime assumptions); until it's wired up for this runtime,
-// checkout/webhook stay gracefully "not configured", same as when the
-// Express server had no STRIPE_SECRET_KEY set.
-app.post('/checkout/create', requireAuth, (c) => c.json({ error: 'Paiement non configuré.' }, 501));
-app.post('/checkout/webhook', (c) => c.json({ error: 'Webhook Stripe non configuré.' }, 501));
+const PRICE_ENV = {
+  starter: 'STRIPE_PRICE_STARTER',
+  pro: 'STRIPE_PRICE_PRO',
+  premium: 'STRIPE_PRICE_PREMIUM',
+  family: 'STRIPE_PRICE_FAMILY',
+};
+
+async function getStripe(env) {
+  const { default: Stripe } = await import('stripe');
+  // httpClient basé sur fetch : le client HTTP par défaut de Stripe repose sur
+  // les modules http/https de Node, indisponibles sur Workers.
+  return new Stripe(env.STRIPE_SECRET_KEY, { httpClient: Stripe.createFetchHttpClient() });
+}
+
+app.post('/checkout/create', requireAuth, async (c) => {
+  if (!c.env.STRIPE_SECRET_KEY) return c.json({ error: 'Paiement non configuré.' }, 501);
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const { plan } = body || {};
+  const priceId = c.env[PRICE_ENV[plan]];
+  if (!priceId) return c.json({ error: `Plan inconnu ou price Stripe non configuré : ${plan}` }, 400);
+  try {
+    const stripe = await getStripe(c.env);
+    const frontend = c.env.FRONTEND_URL || new URL(c.req.url).origin;
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${frontend}/Settings?checkout=success`,
+      cancel_url: `${frontend}/Abonnement?checkout=cancelled`,
+      client_reference_id: user.household_id || '',
+      customer_email: user.email,
+    });
+    return c.json({ url: session.url });
+  } catch (err) {
+    console.error('[checkout/create]', err);
+    return c.json({ error: 'Impossible de créer la session de paiement.' }, 500);
+  }
+});
+
+app.post('/checkout/webhook', async (c) => {
+  if (!c.env.STRIPE_SECRET_KEY || !c.env.STRIPE_WEBHOOK_SECRET) {
+    return c.json({ error: 'Webhook Stripe non configuré.' }, 501);
+  }
+  const rawBody = await c.req.text();
+  const signature = c.req.header('stripe-signature') || '';
+  try {
+    const stripe = await getStripe(c.env);
+    // constructEventAsync (pas la version sync) : la vérification de signature
+    // utilise SubtleCrypto en asynchrone, seule API crypto garantie sur tous
+    // les runtimes edge, y compris Workers.
+    const event = await stripe.webhooks.constructEventAsync(rawBody, signature, c.env.STRIPE_WEBHOOK_SECRET);
+    const query = c.get('query');
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const householdId = session.client_reference_id;
+      if (householdId) {
+        await query(
+          `insert into subscriptions (household_id, plan, status, stripe_customer_id, stripe_subscription_id)
+           values ($1, 'pro', 'active', $2, $3)
+           on conflict (household_id) do update set status = 'active', stripe_customer_id = $2, stripe_subscription_id = $3`,
+          [householdId, session.customer, session.subscription]
+        );
+      }
+    }
+    if (event.type === 'customer.subscription.deleted') {
+      const sub = event.data.object;
+      await query(`update subscriptions set status = 'expired' where stripe_subscription_id = $1`, [sub.id]);
+    }
+    return c.json({ received: true });
+  } catch (err) {
+    console.error('[checkout/webhook]', err.message);
+    return c.json({ error: 'Signature de webhook invalide.' }, 400);
+  }
+});
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 app.onError((err, c) => {
   console.error(err);
-  // Detail temporarily included so the actual cause is visible in the
-  // browser Network tab while we're bringing this deployment up — remove
-  // once things are confirmed stable.
-  return c.json({ error: 'Erreur serveur inattendue', detail: `${err.name}: ${err.message}` }, 500);
+  return c.json({ error: 'Erreur serveur inattendue' }, 500);
 });
 
 export const onRequest = (context) => app.fetch(context.request, context.env, context);

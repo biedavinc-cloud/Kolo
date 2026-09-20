@@ -1,0 +1,26 @@
+name = "kolo"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Bucket R2 pour les fichiers uploadés (reçus, avatars…) — un Worker/une
+# Pages Function n'a pas de disque persistant.
+# Créez-le avec : wrangler r2 bucket create kolo-uploads
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "kolo-uploads"
+
+# Rate limiting natif Cloudflare sur les routes d'authentification (login,
+# register, reset) — un compteur en mémoire n'aurait aucun sens réparti sur
+# des isolates Workers.
+# namespace_id : identifiant arbitraire, unique à votre compte Cloudflare —
+# changez-le uniquement s'il entre en collision avec un autre binding existant.
+[[ratelimits]]
+name = "AUTH_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
+# Les secrets (DATABASE_URL, JWT_SECRET, STRIPE_SECRET_KEY, etc.) ne vont
+# JAMAIS ici (ce fichier est versionné) — configurez-les dans le dashboard
+# Cloudflare Pages (Settings → Environment variables → chiffré) ou avec
+# `wrangler pages secret put NOM`.

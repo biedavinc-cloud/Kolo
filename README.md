@@ -1,22 +1,28 @@
 # Kolo
 
-Application de gestion budgétaire familiale. Frontend React/Vite + backend Express
-connecté à une base Postgres [Neon](https://neon.tech).
+Application de gestion budgétaire familiale. Frontend React/Vite + backend
+[Hono](https://hono.dev) sur **Cloudflare Pages Functions**, connecté à une base
+Postgres [Neon](https://neon.tech).
 
-**Stack :** backend Express sur Neon (Postgres), frontend hébergé sur Cloudflare Pages.
+**Stack :** frontend + backend déployés ensemble sur Cloudflare Pages (même origine),
+base de données Neon.
 
-> Ce dépôt utilisait auparavant Base44 comme backend hébergé. Cette dépendance a été
-> retirée : toute la logique métier vit maintenant dans `server/` (Express + Neon).
-> L'ancien export Base44 (schémas d'entités, fonctions serverless) est conservé pour
-> référence dans `server/legacy-base44/` mais n'est plus exécuté.
+> Ce dépôt utilisait auparavant Base44 comme backend hébergé, puis un serveur Express
+> classique. Le backend déployé est maintenant `functions/api/` (Cloudflare Pages
+> Functions). `server/` (Express) reste dans le dépôt comme référence et pour du
+> développement local hors-Cloudflare si besoin, mais n'est plus ce qui est déployé.
+> L'ancien export Base44 est conservé pour référence dans `server/legacy-base44/`.
 
 ## Structure
 
 ```
-src/            Frontend React (Vite) — pages, composants, hooks
-server/         Backend Express — routes API, auth JWT, accès Neon
-server/schema.sql   Schéma Postgres à appliquer sur votre base Neon
-server/legacy-base44/   Ancien export Base44 (référence uniquement)
+src/                          Frontend React (Vite) — pages, composants, hooks
+functions/api/[[route]].js    Backend déployé — routeur Hono (Cloudflare Pages Functions)
+functions/api/_lib/           Auth (JWT via jose), accès Neon, config des entités, abonnements
+shared/plans.js               Prix (USD) et limites par plan — source unique frontend + backend
+server/                       Backend Express (référence / dev local hors-Cloudflare)
+server/schema.sql             Schéma Postgres à appliquer sur votre base Neon
+server/legacy-base44/         Ancien export Base44 (référence uniquement)
 ```
 
 ## Développement local
@@ -69,6 +75,10 @@ Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
 
 - **Build command** : `npm run build`
 - **Build output directory** : `dist`
+- **Bindings** (voir `wrangler.toml`, à recréer dans Settings → Functions si vous
+  déployez sans passer par `wrangler pages deploy`) :
+  - R2 bucket `UPLOADS` (`kolo-uploads`) — fichiers uploadés (reçus, avatars)
+  - Rate limit `AUTH_RATE_LIMITER` (20 req/min) — protège `/api/auth/*` du brute-force
 - **Variables d'environnement** (Settings → Environment variables), en secret pour les
   deux premières :
   - `DATABASE_URL` — connexion Neon (pooled connection string)
@@ -78,18 +88,30 @@ Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
   - `ANTHROPIC_API_KEY` / `RESEND_API_KEY` / `EMAIL_FROM` (optionnels — assistant IA et
     emails d'invitation restent désactivés proprement, avec un message clair, tant que
     ces clés ne sont pas fournies)
+  - `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_STARTER` /
+    `STRIPE_PRICE_PRO` / `STRIPE_PRICE_PREMIUM` / `STRIPE_PRICE_FAMILY` (optionnels —
+    créez ces price IDs dans **votre propre** dashboard Stripe, en USD, avec les
+    montants de `shared/plans.js` ; ceux de `server/legacy-base44/` appartenaient au
+    compte Stripe de Base44 et ne fonctionneront pas)
 - `public/_redirects` (`/* /index.html 200`) gère déjà le routage React Router côté
   client sur Cloudflare Pages.
 
-### Ce qui n'est pas encore porté
+### Abonnements : prix et accès
 
-- **Upload de fichiers** (`/api/uploads`) : `server/` écrivait sur disque local, ce qui
-  n'existe pas dans Workers. Renvoie un 501 explicite pour l'instant — brancher un
-  bucket Cloudflare R2 pour l'activer.
-- **Paiement Stripe** (`/api/checkout/*`) : le SDK Stripe Node n'est pas chargé dans le
-  Worker pour l'instant (pour garder le bundle léger). Renvoie un 501 explicite tant
-  que ce n'est pas branché — non bloquant puisqu'aucune clé Stripe n'est configurée de
-  toute façon.
-- Connexion Google/Apple : toujours non configurée (nécessite des identifiants OAuth
-  réels côté Google/Apple).
+- Prix des 4 plans (Starter/Pro/Premium/Family) en **USD**, définis une seule fois dans
+  `shared/plans.js` et réutilisés à l'identique par le frontend (affichage) et le
+  backend (facturation Stripe, calcul du MRR) — aucune duplication, donc aucun risque
+  de désynchronisation entre ce qui est affiché et ce qui est réellement facturé/appliqué.
+- Les limites par plan (nombre de comptes bancaires, de membres du foyer, accès à
+  l'assistant IA) sont **appliquées côté serveur** : dépasser la limite d'un plan, ou
+  utiliser une fonctionnalité après expiration de l'essai/abonnement, renvoie une
+  erreur 402 explicite — ce n'est plus seulement une restriction d'affichage
+  contournable en appelant l'API directement.
+
+### Ce qui n'est toujours pas configuré par défaut
+
+- Connexion Google/Apple : nécessite des identifiants OAuth réels côté Google/Apple.
+- Assistant IA, emails d'invitation, paiements Stripe : fonctionnels dès que les
+  clés/secrets correspondants sont renseignés (voir ci-dessus) ; sinon, désactivés
+  proprement avec un message clair plutôt qu'une erreur opaque.
 
