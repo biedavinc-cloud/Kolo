@@ -197,6 +197,7 @@ export const getCheckoutProviders = () => request('/api/checkout/providers');
 export const createCheckoutSession = (plan, provider) =>
   request('/api/checkout/create', { method: 'POST', body: { plan, provider } });
 export const askAiAssistant = (payload) => request('/api/ai-assistant', { method: 'POST', body: payload });
+export const getSubscription = () => request('/api/subscription');
 export const superAdminApi = {
   dashboard: () => request('/api/superadmin/dashboard'),
   action: (payload) => request('/api/superadmin/action', { method: 'POST', body: payload }),

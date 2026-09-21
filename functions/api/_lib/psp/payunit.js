@@ -10,11 +10,18 @@ export const id = 'payunit';
 export const label = 'PayUnit — Mobile Money (Afrique centrale)';
 
 export function isConfigured(env) {
-  return !!(env.PAYUNIT_API_KEY && env.PAYUNIT_API_USER);
+  return !!(env.PAYUNIT_API_KEY && env.PAYUNIT_API_USER && env.PAYUNIT_WEBHOOK_SECRET);
 }
 
 export async function createCheckoutSession(env, ctx) {
   const mode = env.PAYUNIT_MODE === 'live' ? 'live' : 'test';
+  // PayUnit ne documente aucune vérification de signature de webhook — donc,
+  // qu'ils en fassent une ou non, on ajoute notre PROPRE secret dans
+  // notify_url. Sans ce jeton en retour, le webhook est refusé (voir plus
+  // bas) : n'importe qui pourrait sinon POSTer un faux paiement "réussi" sur
+  // /api/checkout/webhook/payunit avec le household_id de son choix, sans
+  // aucune authentification, et s'attribuer un plan payant gratuitement.
+  const notifyUrl = `${ctx.webhookUrl}?secret=${encodeURIComponent(env.PAYUNIT_WEBHOOK_SECRET)}`;
   const res = await fetch(`https://gateway.payunit.net/api/gateway/initialize`, {
     method: 'POST',
     headers: {
@@ -29,7 +36,7 @@ export async function createCheckoutSession(env, ctx) {
       currency: env.PAYUNIT_CURRENCY || 'XAF',
       transaction_id: `kolo-${ctx.household_id}-${Date.now()}`,
       return_url: ctx.successUrl,
-      notify_url: ctx.webhookUrl,
+      notify_url: notifyUrl,
       description: `Kolo — Plan ${ctx.planLabel}`,
       customer_email: ctx.email,
       metadata: { household_id: ctx.household_id, plan: ctx.plan },
@@ -43,12 +50,9 @@ export async function createCheckoutSession(env, ctx) {
 }
 
 export async function verifyAndParseWebhook(env, request, rawBody) {
-  // PayUnit ne documente pas publiquement de vérification de signature au
-  // moment de l'écriture — la notification n'est acceptée que si l'appel
-  // provient bien de leur IP annoncée n'est pas non plus vérifiable côté
-  // Workers. À défaut, on ne traite que les notifications dont le statut
-  // est explicitement "SUCCESS" ; à renforcer une fois leur documentation de
-  // sécurité webhook confirmée.
+  const url = new URL(request.url);
+  const secret = url.searchParams.get('secret');
+  if (!env.PAYUNIT_WEBHOOK_SECRET || secret !== env.PAYUNIT_WEBHOOK_SECRET) return null;
   const event = JSON.parse(rawBody);
   if (event.status === 'SUCCESS' || event.data?.status === 'SUCCESS') {
     const meta = event.metadata || event.data?.metadata || {};

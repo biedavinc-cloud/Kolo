@@ -13,7 +13,7 @@ function getConfig(req, res, next) {
   // Les entités superAdminOnly sont bloquées pour tout non-admin (lecture + écriture).
   // Les entités publicRead (ex: Announcement) sont en lecture libre mais l'écriture
   // reste réservée aux super admins.
-  if ((cfg.superAdminOnly || (cfg.publicRead && isWrite)) && !req.user.is_super_admin) {
+  if ((cfg.superAdminOnly || ((cfg.publicRead || cfg.writeProtected) && isWrite)) && !req.user.is_super_admin) {
     return res.status(403).json({ error: 'Réservé aux super administrateurs' });
   }
   req.entityConfig = cfg;

@@ -65,6 +65,18 @@ function requireSuperAdmin(c, next) {
 
 app.get('/health', (c) => c.json({ ok: true }));
 
+// État d'abonnement du foyer courant — remplace l'ancien accès direct en
+// écriture à /api/entities/Subscription côté frontend (voir Subscription
+// dans entities.config.js : cette entité est désormais writeProtected).
+// Toutes les valeurs (plan par défaut, durée d'essai...) sont fixées côté
+// serveur ; le client ne peut rien injecter ici.
+app.get('/subscription', requireAuth, async (c) => {
+  const user = c.get('user');
+  if (!user.household_id) return c.json({ plan: 'starter', isExpired: false, isTrial: false, subscription: null });
+  const state = await getSubscriptionState(c.get('query'), user.household_id);
+  return c.json(state);
+});
+
 app.get('/health/db', async (c) => {
   try {
     const query = c.get('query');
@@ -337,7 +349,7 @@ function getEntityConfig(c, next) {
   if (!cfg) return c.json({ error: `Entité inconnue : ${c.req.param('entity')}` }, 404);
   const isWrite = c.req.method !== 'GET';
   const user = c.get('user');
-  if ((cfg.superAdminOnly || (cfg.publicRead && isWrite)) && !user?.is_super_admin) {
+  if ((cfg.superAdminOnly || ((cfg.publicRead || cfg.writeProtected) && isWrite)) && !user?.is_super_admin) {
     return c.json({ error: 'Réservé aux super administrateurs' }, 403);
   }
   c.set('entityConfig', cfg);
@@ -369,6 +381,22 @@ function scopeClause(cfg, user, startIndex) {
     values.push(user.household_id);
   }
   return { clauses, values, next: i };
+}
+
+// Vérifie que chaque référence (account_id, category_id, profile_id…) fournie
+// pointe bien vers une ligne du MÊME foyer. Sans ça, un utilisateur pourrait
+// référencer l'ID valide d'un autre foyer : l'insertion réussirait
+// silencieusement (juste une contrainte FK satisfaite), ce qui constitue une
+// fuite d'existence inter-tenant même sans lecture directe des données.
+async function validateReferences(query, cfg, user, body) {
+  if (!cfg.references) return null;
+  for (const [field, table] of Object.entries(cfg.references)) {
+    const value = body[field];
+    if (value === undefined || value === null) continue;
+    const { rows } = await query(`select 1 from ${table} where id = $1 and household_id = $2`, [value, user.household_id]);
+    if (!rows.length) return `${field} invalide : ne correspond à aucune ressource de votre foyer`;
+  }
+  return null;
 }
 
 function buildInsert(cfg, user, body) {
@@ -480,6 +508,8 @@ entities.post('/:entity/bulk', async (c) => {
   }
   const created = [];
   for (const item of items) {
+    const refError = await validateReferences(query, cfg, user, item);
+    if (refError) return c.json({ error: refError }, 400);
     const { cols, placeholders, values } = buildInsert(cfg, user, item);
     const { rows } = await query(
       `insert into ${cfg.table} (${cols.join(', ')}) values (${placeholders.join(', ')}) returning *`,
@@ -514,6 +544,8 @@ entities.post('/:entity', async (c) => {
     }
   }
   const body = (await c.req.json().catch(() => ({}))) || {};
+  const refError = await validateReferences(query, cfg, user, body);
+  if (refError) return c.json({ error: refError }, 400);
   const { cols, placeholders, values } = buildInsert(cfg, user, body);
   const { rows } = await query(
     `insert into ${cfg.table} (${cols.join(', ')}) values (${placeholders.join(', ')}) returning *`,
@@ -532,6 +564,8 @@ entities.put('/:entity/bulk', async (c) => {
   for (const item of items) {
     const { id, ...fields } = item;
     if (!id) continue;
+    const refError = await validateReferences(query, cfg, user, fields);
+    if (refError) return c.json({ error: refError }, 400);
     const sets = [];
     const values = [];
     let i = 1;
@@ -560,6 +594,8 @@ entities.put('/:entity/:id', async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
   const body = (await c.req.json().catch(() => ({}))) || {};
+  const refError = await validateReferences(query, cfg, user, body);
+  if (refError) return c.json({ error: refError }, 400);
   const sets = [];
   const values = [];
   let i = 1;
@@ -1000,11 +1036,20 @@ app.post('/ai-assistant', requireAuth, async (c) => {
 });
 
 app.post('/invite', requireAuth, async (c) => {
+  const query = c.get('query');
+  const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
-  const { to, householdName, inviteCode } = body || {};
-  if (!to || !inviteCode) return c.json({ error: 'to et inviteCode requis' }, 400);
-  const subject = `Invitation à rejoindre ${householdName || 'un foyer'} sur Kolo`;
-  const text = `Vous avez été invité·e à rejoindre "${householdName || 'un foyer'}" sur Kolo.\nCode d'invitation : ${inviteCode}`;
+  const { to } = body || {};
+  if (!to) return c.json({ error: 'to requis' }, 400);
+  if (!user.household_id) return c.json({ error: 'Aucun foyer associé à ce compte' }, 403);
+  // Le code d'invitation et le nom du foyer viennent TOUJOURS du foyer réel de
+  // l'appelant, jamais du corps de la requête — sinon n'importe qui pourrait
+  // faire envoyer une invitation portant le code d'un autre foyer.
+  const { rows } = await query('select name, invite_code from households where id = $1', [user.household_id]);
+  const household = rows[0];
+  if (!household?.invite_code) return c.json({ error: 'Foyer introuvable' }, 404);
+  const subject = `Invitation à rejoindre ${household.name || 'un foyer'} sur Kolo`;
+  const text = `Vous avez été invité·e à rejoindre "${household.name || 'un foyer'}" sur Kolo.\nCode d'invitation : ${household.invite_code}`;
   if (!c.env.RESEND_API_KEY) {
     console.log(`[invite] Pas de fournisseur email configuré. À envoyer à ${to}:\n${subject}\n${text}`);
     return c.json({ ok: true, delivered: false });

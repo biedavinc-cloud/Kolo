@@ -24,18 +24,24 @@ export const ENTITIES = {
     table: 'transactions',
     householdScoped: true,
     fields: ['account_id', 'category_id', 'profile_id', 'amount', 'type', 'date', 'notes', 'receipt_url'],
-    defaultSort: 'date desc',
+    // Empêche de référencer le compte/catégorie d'un AUTRE foyer (isolation
+    // stricte : sans ce contrôle, un ID valide dans un autre foyer réussirait
+    // silencieusement l'insertion — une fuite d'existence inter-tenant, même
+    // sans lecture directe des données de cet autre foyer).
+    references: { account_id: 'accounts', category_id: 'categories', profile_id: 'users' },
   },
   Budget: {
     table: 'budgets',
     householdScoped: true,
     fields: ['category_id', 'amount_limit', 'month_year'],
+    references: { category_id: 'categories' },
     defaultSort: 'created_at desc',
   },
   RecurringTransaction: {
     table: 'recurring_transactions',
     householdScoped: true,
     fields: ['account_id', 'category_id', 'amount', 'type', 'frequency', 'next_date', 'notes'],
+    references: { account_id: 'accounts', category_id: 'categories' },
     defaultSort: 'next_date asc',
   },
   SavingsGoal: {
@@ -48,11 +54,19 @@ export const ENTITIES = {
     table: 'debts',
     householdScoped: true,
     fields: ['name', 'creditor', 'initial_amount', 'remaining_amount', 'monthly_payment', 'interest_rate', 'account_id', 'notes'],
+    references: { account_id: 'accounts' },
     defaultSort: 'created_at desc',
   },
   Subscription: {
     table: 'subscriptions',
     householdScoped: true,
+    // Lecture par le foyer autorisée (afficher son propre plan), mais l'écriture
+    // (plan, status…) ne doit JAMAIS passer par l'API générique — sinon
+    // n'importe quel utilisateur peut s'auto-attribuer un plan payant sans payer.
+    // Seuls le webhook de paiement vérifié et une action super admin peuvent
+    // modifier une souscription (voir /checkout/webhook/:provider et
+    // /superadmin/action → adjust_subscription).
+    writeProtected: true,
     fields: ['plan', 'status', 'trial_end', 'period_end', 'stripe_customer_id', 'stripe_subscription_id'],
     defaultSort: 'created_at desc',
   },

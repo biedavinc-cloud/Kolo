@@ -53,6 +53,10 @@ export const ENTITIES = {
   Subscription: {
     table: 'subscriptions',
     householdScoped: true,
+    // Écriture bloquée pour tout non-admin (voir getConfig) : sinon n'importe
+    // quel utilisateur peut s'auto-attribuer un plan payant sans payer via
+    // l'API générique d'entités.
+    writeProtected: true,
     fields: ['plan', 'status', 'trial_end', 'period_end', 'stripe_customer_id', 'stripe_subscription_id'],
     defaultSort: 'created_at desc',
   },
