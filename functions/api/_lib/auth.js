@@ -21,6 +21,7 @@ export async function signToken(env, user, opts = {}) {
     role: user.role,
     household_id: user.household_id,
     is_super_admin: user.is_super_admin,
+    is_founder: user.is_founder,
     purpose: opts.purpose,
   })
     .setProtectedHeader({ alg: 'HS256' })

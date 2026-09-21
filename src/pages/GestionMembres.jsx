@@ -18,7 +18,7 @@ export default function GestionMembres() {
   const { household } = useHousehold(user);
   const { data: members = [], refetch } = useMembers(user);
   const { toast } = useToast();
-  const canManage = isSuperAdmin(user);
+  const canManage = user?.is_super_admin || user?.role === "admin";
 
   const changeRole = async (m, role) => {
     try {
@@ -39,9 +39,7 @@ export default function GestionMembres() {
 
   const removeFromHousehold = async (m) => {
     try {
-      await db.entities.User.update(m.id, {
-        data: { ...(m.data || {}), household_id: null },
-      });
+      await db.entities.User.update(m.id, { household_id: null });
       toast({
         title: "Membre retiré du foyer",
         description: `${m.email} devra créer ou rejoindre un foyer à sa prochaine connexion.`,

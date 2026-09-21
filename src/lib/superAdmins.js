@@ -1,30 +1,18 @@
-import { db } from "@/api/client";
-import { useQuery } from "@tanstack/react-query";
-
-// Super administrateurs fondateurs : protégés, jamais retirables
-export const SUPER_ADMIN_EMAILS = [
-  "vincentnogue2@gmail.com",
-  "vincentnogue@yahoo.com",
-];
-
+// Statut super admin / fondateur : dérivé du JWT (calculé et signé côté
+// serveur à partir de la table super_admins et de CORE_SUPER_ADMIN_EMAILS —
+// voir functions/api/[[route]].js). Aucune liste d'emails ici : outre le
+// risque de désynchronisation avec le serveur, publier des emails réels dans
+// le bundle JS public n'est pas souhaitable.
 export function isSuperAdmin(user) {
-  if (!user) return false;
-  const email = (user.email || "").toLowerCase().trim();
-  return SUPER_ADMIN_EMAILS.includes(email);
+  return !!user?.is_super_admin;
 }
 
-// Super administrateurs dynamiques (module Super Admin) + fondateurs
+export function isFounder(user) {
+  return !!user?.is_founder;
+}
+
+// Conservé pour compatibilité avec le code existant qui appelle ce hook —
+// ce n'est plus une requête réseau, juste une lecture du JWT déjà en mémoire.
 export function useIsSuperAdmin(user) {
-  const email = (user?.email || "").toLowerCase().trim();
-  const { data: supers = [] } = useQuery({
-    queryKey: ["superAdmins"],
-    queryFn: () => db.entities.SuperAdmin.list(),
-    staleTime: 60000,
-    retry: false,
-  });
-  if (!user) return false;
-  return (
-    SUPER_ADMIN_EMAILS.includes(email) ||
-    supers.some((s) => (s.email || "").toLowerCase().trim() === email)
-  );
+  return isSuperAdmin(user);
 }

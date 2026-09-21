@@ -94,9 +94,11 @@ async function isSuperAdmin(query, email) {
   const { rows } = await query('select role from super_admins where email = $1', [email]);
   return rows[0]?.role || null;
 }
-async function loadUserPayload(query, userRow) {
+async function loadUserPayload(query, userRow, env) {
   const superAdminRole = await isSuperAdmin(query, userRow.email);
-  return { ...userRow, is_super_admin: !!superAdminRole, super_admin_role: superAdminRole };
+  const coreAdmins = (env?.CORE_SUPER_ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const is_founder = coreAdmins.includes((userRow.email || '').toLowerCase());
+  return { ...userRow, is_super_admin: !!superAdminRole, super_admin_role: superAdminRole, is_founder };
 }
 
 app.post('/auth/register', async (c) => {
@@ -114,7 +116,7 @@ app.post('/auth/register', async (c) => {
     `insert into users (email, password_hash, full_name) values ($1, $2, $3) returning *`,
     [email.toLowerCase(), password_hash, full_name || null]
   );
-  const user = await loadUserPayload(query, rows[0]);
+  const user = await loadUserPayload(query, rows[0], c.env);
   const token = await signToken(c.env, user);
   return c.json({ token, user: publicUser(user) }, 201);
 });
@@ -129,7 +131,7 @@ app.post('/auth/login', async (c) => {
   if (!row || !(await verifyPassword(password, row.password_hash))) {
     return c.json({ error: 'Identifiants invalides' }, 401);
   }
-  const user = await loadUserPayload(query, row);
+  const user = await loadUserPayload(query, row, c.env);
   const token = await signToken(c.env, user);
   return c.json({ token, user: publicUser(user) });
 });
@@ -138,7 +140,7 @@ app.get('/auth/me', requireAuth, async (c) => {
   const query = c.get('query');
   const { rows } = await query('select * from users where id = $1', [c.get('user').sub]);
   if (!rows[0]) return c.json({ error: 'Utilisateur introuvable' }, 404);
-  const user = await loadUserPayload(query, rows[0]);
+  const user = await loadUserPayload(query, rows[0], c.env);
   return c.json(publicUser(user));
 });
 
@@ -172,7 +174,7 @@ app.put('/auth/me', requireAuth, async (c) => {
   if (!columnUpdates.length) return c.json({ error: 'Aucun champ à mettre à jour' }, 400);
   values.push(c.get('user').sub);
   const { rows } = await query(`update users set ${columnUpdates.join(', ')} where id = $${i} returning *`, values);
-  const user = await loadUserPayload(query, rows[0]);
+  const user = await loadUserPayload(query, rows[0], c.env);
   return c.json(publicUser(user));
 });
 
@@ -231,7 +233,7 @@ app.get('/household', requireAuth, async (c) => {
 
 async function reissueToken(c, query, userId) {
   const { rows } = await query('select * from users where id = $1', [userId]);
-  const user = await loadUserPayload(query, rows[0]);
+  const user = await loadUserPayload(query, rows[0], c.env);
   return signToken(c.env, user);
 }
 
@@ -323,22 +325,57 @@ app.put('/entities-users/:id', requireAuth, async (c) => {
   const query = c.get('query');
   const user = c.get('user');
   const id = c.req.param('id');
-  if (id !== user.sub && !user.is_super_admin) return c.json({ error: 'Non autorisé' }, 403);
+  const isSelf = id === user.sub;
+  // Admin de FOYER (role='admin' au sein de son foyer — distinct du super
+  // admin plateforme) : peut gérer les AUTRES membres de son propre foyer.
+  const isHouseholdAdmin = !user.is_super_admin && user.role === 'admin' && !!user.household_id;
+
+  if (!isSelf && !user.is_super_admin && !isHouseholdAdmin) {
+    return c.json({ error: 'Non autorisé' }, 403);
+  }
+
   const body = (await c.req.json().catch(() => ({}))) || {};
-  const allowed = user.is_super_admin ? ['full_name', 'role', 'household_id'] : ['full_name'];
   const sets = [];
   const values = [];
   let i = 1;
-  for (const key of allowed) {
-    if (key in body) {
-      sets.push(`${key} = $${i++}`);
-      values.push(body[key]);
+
+  if (user.is_super_admin) {
+    for (const key of ['full_name', 'role', 'household_id']) {
+      if (key in body) {
+        sets.push(`${key} = $${i++}`);
+        values.push(body[key]);
+      }
+    }
+  } else if (isSelf) {
+    if ('full_name' in body) {
+      sets.push(`full_name = $${i++}`);
+      values.push(body.full_name);
+    }
+  } else if (isHouseholdAdmin) {
+    // Peut changer le rôle d'un membre de SON foyer, ou le retirer
+    // (household_id -> null) — jamais le déplacer vers un AUTRE foyer, ce
+    // qui contournerait /household/join (code d'invitation, limite de plan).
+    if ('role' in body && ['admin', 'user'].includes(body.role)) {
+      sets.push(`role = $${i++}`);
+      values.push(body.role);
+    }
+    if ('household_id' in body && body.household_id === null) {
+      sets.push(`household_id = $${i++}`);
+      values.push(null);
     }
   }
+
   if (!sets.length) return c.json({ error: 'Aucun champ à mettre à jour' }, 400);
+  const where = [`id = $${i++}`];
   values.push(id);
-  const { rows } = await query(`update users set ${sets.join(', ')} where id = $${i} returning *`, values);
-  if (!rows[0]) return c.json({ error: 'Introuvable' }, 404);
+  if (isHouseholdAdmin) {
+    // Isolation stricte : un admin de foyer n'agit que sur les membres de
+    // SON PROPRE foyer, jamais sur ceux d'un autre.
+    where.push(`household_id = $${i++}`);
+    values.push(user.household_id);
+  }
+  const { rows } = await query(`update users set ${sets.join(', ')} where ${where.join(' and ')} returning *`, values);
+  if (!rows[0]) return c.json({ error: 'Introuvable ou non autorisé' }, 404);
   return c.json(publicUser(rows[0]));
 });
 
@@ -914,6 +951,15 @@ superadmin.get('/team', async (c) => {
   const query = c.get('query');
   const { rows } = await query('select * from super_admins order by created_at desc');
   return c.json(rows);
+});
+
+// Liste des fondateurs (CORE_SUPER_ADMIN_EMAILS) pour l'UI — jamais exposée
+// dans le bundle public : cette route est derrière requireSuperAdmin
+// (superadmin.use('*', ...) plus haut), donc seuls des super admins déjà
+// authentifiés peuvent la voir.
+superadmin.get('/founders', (c) => {
+  const founders = (c.env.CORE_SUPER_ADMIN_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return c.json({ founders });
 });
 
 superadmin.post('/team', async (c) => {

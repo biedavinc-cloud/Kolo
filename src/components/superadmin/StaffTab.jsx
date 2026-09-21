@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Lock, UserPlus, Trash2, Loader2, ShieldCheck, Eye, Info } from "lucide-react";
-import { SUPER_ADMIN_EMAILS } from "@/lib/superAdmins";
 
 // Rôles délégués et leurs accès personnalisés
 const DELEGATED_ROLES = {
@@ -28,7 +27,13 @@ export default function StaffTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { user } = useAuth();
-  const isFounder = SUPER_ADMIN_EMAILS.includes((user?.email || "").toLowerCase());
+  const isFounder = !!user?.is_founder;
+
+  const { data: foundersData } = useQuery({
+    queryKey: ["founders"],
+    queryFn: () => superAdminApi.founders(),
+  });
+  const founders = foundersData?.founders || [];
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("admin");
@@ -103,7 +108,7 @@ export default function StaffTab() {
           <Lock className="h-4 w-4" /> Fondateurs (protégés)
         </h3>
         <div className="space-y-2">
-          {SUPER_ADMIN_EMAILS.map((e) => (
+          {founders.map((e) => (
             <div key={e} className="flex items-center justify-between rounded-full bg-secondary/60 px-3 py-2.5">
               <span className="text-sm font-medium">{e}</span>
               <span className="rounded-full border border-primary/30 bg-accent px-2.5 py-0.5 text-[11px] font-medium text-accent-foreground">
