@@ -42,7 +42,7 @@ export default function CGU() {
       </p>
 
       <h2>Contact</h2>
-      <p>Pour toute question : contact@kolo.app</p>
+      <p>Pour toute question : contact@kolo.liafrik.com</p>
     </LegalLayout>
   );
 }

@@ -40,7 +40,7 @@ export default function Confidentialite() {
       <p>
         Conformément au RGPD, vous disposez d'un droit d'accès, de rectification, de suppression et
         de portabilité de vos données. Vous pouvez exporter vos données depuis les paramètres de
-        l'application, ou nous contacter à contact@kolo.app pour toute demande.
+        l'application, ou nous contacter à contact@kolo.liafrik.com pour toute demande.
       </p>
 
       <h2>Suppression de compte</h2>

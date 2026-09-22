@@ -1,32 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://kolo.app/</loc>
+    <loc>https://kolo.liafrik.com/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://kolo.app/register</loc>
+    <loc>https://kolo.liafrik.com/register</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://kolo.app/login</loc>
+    <loc>https://kolo.liafrik.com/login</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://kolo.app/mentions-legales</loc>
+    <loc>https://kolo.liafrik.com/mentions-legales</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://kolo.app/confidentialite</loc>
+    <loc>https://kolo.liafrik.com/confidentialite</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://kolo.app/cgu</loc>
+    <loc>https://kolo.liafrik.com/cgu</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>

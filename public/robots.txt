@@ -34,4 +34,4 @@ Disallow: /onboarding
 Disallow: /reset-password
 Disallow: /aide
 
-Sitemap: https://kolo.app/sitemap.xml
+Sitemap: https://kolo.liafrik.com/sitemap.xml
