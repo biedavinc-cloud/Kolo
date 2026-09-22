@@ -6,7 +6,16 @@ import { LOGO_URL } from "@/lib/branding";
 
 export default function AuthLayout({ icon: Icon, title, subtitle, footer, children }) {
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-background px-4">
+    <div
+      className="relative min-h-screen flex items-center justify-center px-4"
+      style={{
+        backgroundImage:
+          "linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.88)), url('/images/auth-family.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center 25%",
+        backgroundAttachment: "fixed",
+      }}
+    >
       {/* Retour vers la page d'accueil */}
       <Link
         to="/"

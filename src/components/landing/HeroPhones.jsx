@@ -42,7 +42,7 @@ function ExpensesPhone() {
     { label: "Santé", value: 95, max: 800, color: "#86efac" },
   ];
   return (
-    <PhoneShell className="w-[152px] sm:w-[176px]">
+    <PhoneShell className="w-[172px] sm:w-[210px]">
       <StatusBar />
       <div className="px-3.5 pb-4 pt-2">
         <p className="text-[9px] font-medium text-gray-400">Dépenses de janvier</p>
@@ -90,7 +90,7 @@ function BalancePhone() {
   const areaPath = `${linePath} L${w},${h} L0,${h} Z`;
 
   return (
-    <PhoneShell className="w-[152px] sm:w-[176px]">
+    <PhoneShell className="w-[172px] sm:w-[210px]">
       <StatusBar />
       <div className="px-3.5 pb-4 pt-2">
         <p className="text-[9px] font-medium text-gray-400">Solde du foyer</p>
@@ -151,7 +151,7 @@ export default function HeroPhones() {
       <motion.div
         animate={{ y: [0, -14, 0] }}
         transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
-        className="relative z-20 -ml-9 rotate-6 sm:-ml-12"
+        className="relative z-20 -ml-11 rotate-6 sm:-ml-14"
       >
         <BalancePhone />
       </motion.div>

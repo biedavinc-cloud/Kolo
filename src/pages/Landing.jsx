@@ -21,7 +21,10 @@ export default function Landing() {
       {/* Bloc hero bleu : nav + téléphones + titre + carte QR */}
       <div
         style={{
-          background: "radial-gradient(120% 90% at 50% 0%, #4A90E2 0%, #89CFF0 80%)",
+          backgroundImage:
+            "radial-gradient(120% 90% at 50% 0%, rgba(74,144,226,0.88) 0%, rgba(137,207,240,0.82) 80%), url('/images/hero-family.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center 20%",
         }}
       >
         <LandingNav />
