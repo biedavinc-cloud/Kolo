@@ -20,7 +20,7 @@ export default function MentionsLegales() {
         <br />
         Site : <a href="https://www.liafrik.com" target="_blank" rel="noopener noreferrer">www.liafrik.com</a>
         <br />
-        Contact : contact@kolo.app
+        Contact : contact@kolo.liafrik.com
       </p>
 
       <h2>Hébergement</h2>
@@ -37,7 +37,7 @@ export default function MentionsLegales() {
       </p>
 
       <h2>Contact</h2>
-      <p>Pour toute question relative à ces mentions légales : contact@kolo.app</p>
+      <p>Pour toute question relative à ces mentions légales : contact@kolo.liafrik.com</p>
     </LegalLayout>
   );
 }

@@ -4,7 +4,7 @@ import { hashPassword, verifyPassword, signToken, verifyToken, publicUser } from
 import { ENTITIES } from './_lib/entities.config.js';
 import { getSubscriptionState, requireActiveSubscription, checkPlanLimit } from './_lib/subscription.js';
 import { PLANS, planById } from '../../shared/plans.js';
-import { availableProviders, getProvider } from './_lib/psp/index.js';
+import { availableProviders, getProvider, diagnoseProviders } from './_lib/psp/index.js';
 
 const app = new Hono().basePath('/api');
 
@@ -1196,6 +1196,12 @@ app.post('/invite', requireAuth, async (c) => {
 const PLAN_LABELS = Object.fromEntries(PLANS.map((p) => [p.id, p.name]));
 
 app.get('/checkout/providers', (c) => c.json({ providers: availableProviders(c.env) }));
+
+// Diagnostic réservé aux super administrateurs — dit précisément quelle(s)
+// variable(s) manque(nt) pour chaque PSP, sans jamais exposer les valeurs.
+app.get('/checkout/diagnose', requireAuth, requireSuperAdmin, (c) =>
+  c.json({ providers: diagnoseProviders(c.env) })
+);
 
 app.post('/checkout/create', requireAuth, async (c) => {
   const query = c.get('query');

@@ -96,8 +96,9 @@ Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
     - **Flutterwave** : `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_HASH`,
       `FLUTTERWAVE_CURRENCY` (optionnel, défaut `USD`)
     - **PayUnit** : `PAYUNIT_API_KEY`, `PAYUNIT_API_USER`, `PAYUNIT_API_PASSWORD`,
-      `PAYUNIT_MODE` (`test`|`live`), `PAYUNIT_CURRENCY` (optionnel, défaut `XAF`) — ⚠️
-      intégration non testée contre un vrai sandbox, à vérifier en priorité
+      `PAYUNIT_WEBHOOK_SECRET` (inventé par vous — PayUnit ne signe pas ses
+      notifications, ce secret dans l'URL de webhook sert à les authentifier),
+      `PAYUNIT_MODE` (`test`|`live`), `PAYUNIT_CURRENCY` (optionnel, défaut `XAF`)
     - **Paddle** : `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_MODE` (`sandbox`|`live`)
     - Webhooks à configurer chez chaque PSP vers
       `https://<votre-domaine>/api/checkout/webhook/<stripe|paystack|flutterwave|payunit|paddle>`
@@ -120,12 +121,11 @@ Tout tourne maintenant sur Cloudflare Pages — frontend **et** backend :
 
 ### Ce qui n'est toujours pas configuré/vérifié par défaut
 
-- **Paiement** : intégrations Stripe/Paystack/Flutterwave/Paddle écrites contre l'API
-  REST documentée de chaque fournisseur, mais **non testées contre un vrai
-  sandbox** (aucune clé disponible pendant le développement, et ces domaines ne sont
-  pas joignables depuis l'environnement où ce code a été écrit). PayUnit en particulier
-  est peu documenté publiquement — à vérifier en priorité. Tester chaque PSP en mode
-  test avant d'activer ses clés en production.
+- **Paiement** : intégrations Stripe/Paystack/Flutterwave/Paddle/PayUnit écrites
+  contre l'API REST documentée de chaque fournisseur, mais **non testées contre un
+  vrai sandbox** (aucune clé disponible pendant le développement, et ces domaines ne
+  sont pas joignables depuis l'environnement où ce code a été écrit). Testez chaque
+  PSP en mode test avant d'activer ses clés en production.
 - Connexion Google/Apple : nécessite des identifiants OAuth réels côté Google/Apple.
 - Assistant IA, emails d'invitation : fonctionnels dès que les clés/secrets
   correspondants sont renseignés (voir ci-dessus) ; sinon, désactivés proprement avec un

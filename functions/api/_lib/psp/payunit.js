@@ -1,16 +1,16 @@
 // Intégration PayUnit (agrégateur mobile money — Afrique centrale/de l'Ouest)
-// — https://docs.payunit.net
-// ATTENTION : PayUnit est moins documenté publiquement que les autres PSP.
-// Cette intégration suit leur contrat REST tel que documenté, mais n'a pu
-// être vérifiée contre un vrai environnement sandbox (aucune clé disponible
-// ici, et le domaine de leur API n'est pas joignable depuis cet
-// environnement de build). À tester en priorité avant mise en production.
+// Vérifiée contre la documentation officielle :
+// https://developer.payunit.net/rest-api/initialize-payment
+// (trouvée après coup — la première version de ce fichier avait deviné un
+// contrat différent de la vraie API, ce qui empêchait tout paiement PayUnit
+// d'aboutir : mauvais en-tête d'authentification, mauvais nom de champ pour
+// les données personnalisées.)
 
 export const id = 'payunit';
 export const label = 'PayUnit — Mobile Money (Afrique centrale)';
 
 export function isConfigured(env) {
-  return !!(env.PAYUNIT_API_KEY && env.PAYUNIT_API_USER && env.PAYUNIT_WEBHOOK_SECRET);
+  return !!(env.PAYUNIT_API_KEY && env.PAYUNIT_API_USER && env.PAYUNIT_API_PASSWORD && env.PAYUNIT_WEBHOOK_SECRET);
 }
 
 export async function createCheckoutSession(env, ctx) {
@@ -22,14 +22,18 @@ export async function createCheckoutSession(env, ctx) {
   // /api/checkout/webhook/payunit avec le household_id de son choix, sans
   // aucune authentification, et s'attribuer un plan payant gratuitement.
   const notifyUrl = `${ctx.webhookUrl}?secret=${encodeURIComponent(env.PAYUNIT_WEBHOOK_SECRET)}`;
+
+  // Authentification Basic (base64 "apiUsername:apiPassword") — c'est ce que
+  // leur API REST attend réellement, pas des en-têtes x-api-user/x-api-password.
+  const basicAuth = btoa(`${env.PAYUNIT_API_USER}:${env.PAYUNIT_API_PASSWORD}`);
+
   const res = await fetch(`https://gateway.payunit.net/api/gateway/initialize`, {
     method: 'POST',
     headers: {
       'x-api-key': env.PAYUNIT_API_KEY,
-      'x-api-user': env.PAYUNIT_API_USER,
-      'x-api-password': env.PAYUNIT_API_PASSWORD || '',
       mode,
       'Content-Type': 'application/json',
+      Authorization: `Basic ${basicAuth}`,
     },
     body: JSON.stringify({
       total_amount: Math.round(ctx.amountUsd),
@@ -37,9 +41,9 @@ export async function createCheckoutSession(env, ctx) {
       transaction_id: `kolo-${ctx.household_id}-${Date.now()}`,
       return_url: ctx.successUrl,
       notify_url: notifyUrl,
-      description: `Kolo — Plan ${ctx.planLabel}`,
-      customer_email: ctx.email,
-      metadata: { household_id: ctx.household_id, plan: ctx.plan },
+      // "custom_fields", pas "metadata" — nom confirmé par les définitions
+      // TypeScript officielles du SDK (InitiatePaymentRequest).
+      custom_fields: { household_id: ctx.household_id, plan: ctx.plan },
     }),
   });
   const data = await res.json();
@@ -54,9 +58,10 @@ export async function verifyAndParseWebhook(env, request, rawBody) {
   const secret = url.searchParams.get('secret');
   if (!env.PAYUNIT_WEBHOOK_SECRET || secret !== env.PAYUNIT_WEBHOOK_SECRET) return null;
   const event = JSON.parse(rawBody);
-  if (event.status === 'SUCCESS' || event.data?.status === 'SUCCESS') {
-    const meta = event.metadata || event.data?.metadata || {};
-    return { household_id: meta.household_id, plan: meta.plan, status: 'active' };
+  const status = event.status || event.data?.status || event.transaction_status;
+  if (status === 'SUCCESS' || status === 'SUCCESSFUL') {
+    const custom = event.custom_fields || event.data?.custom_fields || {};
+    return { household_id: custom.household_id, plan: custom.plan, status: 'active' };
   }
   return null;
 }

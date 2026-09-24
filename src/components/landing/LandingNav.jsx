@@ -1,13 +1,15 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, ArrowRight } from "lucide-react";
+import { Menu, ArrowRight, Globe } from "lucide-react";
 import { Image } from "@/components/ui/image";
 import { LOGO_URL } from "@/lib/branding";
+import { useI18n } from "@/lib/i18n";
 
 // Navigation publique — pilule flottante en verre sur le dégradé bleu du hero
 export default function LandingNav() {
   const [open, setOpen] = useState(false);
+  const { lang, setLang } = useI18n();
 
   return (
     <div className="sticky top-0 z-40 px-3 pt-3 sm:px-5 sm:pt-4">
@@ -39,6 +41,18 @@ export default function LandingNav() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <div className="relative hidden sm:block">
+            <Globe className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value)}
+              aria-label="Langue"
+              className="h-9 appearance-none rounded-full border border-black/10 bg-white pl-8 pr-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+            >
+              <option value="fr">FR</option>
+              <option value="en">EN</option>
+            </select>
+          </div>
           <Link
             to="/login"
             className="hidden h-9 items-center gap-1.5 rounded-full bg-[#0B2FA8] px-4 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#0A2A8C] hover:shadow-md sm:inline-flex"
@@ -80,6 +94,23 @@ export default function LandingNav() {
                   Sécurité
                 </a>
                 <div className="my-2 h-px bg-gray-100" />
+                <div className="flex items-center justify-between px-3 py-1.5">
+                  <span className="text-xs font-medium text-gray-500">Langue</span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setLang("fr")}
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${lang === "fr" ? "bg-primary text-white" : "bg-gray-100 text-gray-600"}`}
+                    >
+                      FR
+                    </button>
+                    <button
+                      onClick={() => setLang("en")}
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${lang === "en" ? "bg-primary text-white" : "bg-gray-100 text-gray-600"}`}
+                    >
+                      EN
+                    </button>
+                  </div>
+                </div>
                 <Link
                   to="/login"
                   onClick={() => setOpen(false)}

@@ -210,7 +210,7 @@ export default function StaffTab() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="collaborateur@kolo.app"
+                placeholder="collaborateur@kolo.liafrik.com"
               />
             </div>
             <div className="space-y-1.5 sm:w-56">
