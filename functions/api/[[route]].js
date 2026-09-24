@@ -552,10 +552,56 @@ entities.post('/:entity/bulk', async (c) => {
       `insert into ${cfg.table} (${cols.join(', ')}) values (${placeholders.join(', ')}) returning *`,
       values
     );
+    if (entityName === 'Transaction') {
+      await checkBudgetAlerts(query, user, rows[0]);
+    }
     created.push(rows[0]);
   }
   return c.json(created, 201);
 });
+
+// Alertes de budget (budget_warning à 80%, budget_exceeded à 100%) — la
+// seule chose qui peut réalistement se déclencher "en direct", sur l'action
+// qui vient de se produire (créer une dépense), sans tâche planifiée.
+// dedupe_key empêche de renotifier plusieurs fois le même dépassement dans
+// le même mois.
+async function checkBudgetAlerts(query, user, tx) {
+  if (tx.type !== 'expense' || !tx.category_id || !tx.date) return;
+  const monthYear = String(tx.date).slice(0, 7);
+  const { rows: budgetRows } = await query(
+    'select * from budgets where household_id = $1 and category_id = $2 and month_year = $3',
+    [user.household_id, tx.category_id, monthYear]
+  );
+  const budget = budgetRows[0];
+  if (!budget || !(Number(budget.amount_limit) > 0)) return;
+
+  const { rows: sumRows } = await query(
+    `select coalesce(sum(amount), 0)::numeric as total from transactions
+     where household_id = $1 and category_id = $2 and type = 'expense' and to_char(date, 'YYYY-MM') = $3`,
+    [user.household_id, tx.category_id, monthYear]
+  );
+  const spent = Number(sumRows[0].total);
+  const limit = Number(budget.amount_limit);
+  const pct = (spent / limit) * 100;
+  if (pct < 80) return;
+
+  const { rows: catRows } = await query('select name from categories where id = $1', [tx.category_id]);
+  const catName = catRows[0]?.name || 'cette catégorie';
+  const type = pct >= 100 ? 'budget_exceeded' : 'budget_warning';
+  const dedupe = `${type}:${budget.id}:${monthYear}`;
+  const title = pct >= 100 ? `Budget dépassé : ${catName}` : `Budget bientôt atteint : ${catName}`;
+  const message =
+    pct >= 100
+      ? `Le budget "${catName}" est dépassé (${spent.toFixed(2)} / ${limit.toFixed(2)}).`
+      : `Vous avez utilisé ${pct.toFixed(0)}% du budget "${catName}" (${spent.toFixed(2)} / ${limit.toFixed(2)}).`;
+
+  await query(
+    `insert into notifications (household_id, dedupe_key, type, title, message, severity)
+     select $1, $2, $3, $4, $5, $6
+     where not exists (select 1 from notifications where household_id = $1 and dedupe_key = $2)`,
+    [user.household_id, dedupe, type, title, message, pct >= 100 ? 'error' : 'warning']
+  );
+}
 
 entities.post('/:entity', async (c) => {
   const query = c.get('query');
@@ -588,6 +634,9 @@ entities.post('/:entity', async (c) => {
     `insert into ${cfg.table} (${cols.join(', ')}) values (${placeholders.join(', ')}) returning *`,
     values
   );
+  if (entityName === 'Transaction') {
+    await checkBudgetAlerts(query, user, rows[0]);
+  }
   return c.json(rows[0], 201);
 });
 
@@ -651,6 +700,9 @@ entities.put('/:entity/:id', async (c) => {
   }
   const { rows } = await query(`update ${cfg.table} set ${sets.join(', ')} where ${where.join(' and ')} returning *`, values);
   if (!rows[0]) return c.json({ error: 'Introuvable' }, 404);
+  if (c.req.param('entity') === 'Transaction') {
+    await checkBudgetAlerts(query, user, rows[0]);
+  }
   return c.json(rows[0]);
 });
 
@@ -960,6 +1012,33 @@ superadmin.get('/team', async (c) => {
 superadmin.get('/founders', (c) => {
   const founders = (c.env.CORE_SUPER_ADMIN_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean);
   return c.json({ founders });
+});
+
+// Diagnostic PSP : montre, pour chaque fournisseur de paiement, EXACTEMENT
+// quelle variable d'environnement manque — jamais la valeur elle-même,
+// seulement présente/absente. Utile quand un PSP est configuré côté
+// Cloudflare mais que l'app dit "aucun moyen de paiement" : ça isole en une
+// requête si c'est un nom de variable erroné, un mauvais environnement
+// (Preview vs Production) ou un déploiement qui n'a pas repris les nouvelles
+// variables.
+superadmin.get('/checkout/diagnostics', (c) => {
+  const REQUIRED_VARS = {
+    stripe: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'],
+    paystack: ['PAYSTACK_SECRET_KEY'],
+    flutterwave: ['FLUTTERWAVE_SECRET_KEY', 'FLUTTERWAVE_WEBHOOK_HASH'],
+    payunit: ['PAYUNIT_API_KEY', 'PAYUNIT_API_USER', 'PAYUNIT_WEBHOOK_SECRET'],
+    paddle: ['PADDLE_API_KEY', 'PADDLE_WEBHOOK_SECRET'],
+  };
+  const report = Object.fromEntries(
+    Object.entries(REQUIRED_VARS).map(([provider, vars]) => [
+      provider,
+      {
+        configured: getProvider(c.env, provider) !== null,
+        vars: Object.fromEntries(vars.map((v) => [v, !!c.env[v]])),
+      },
+    ])
+  );
+  return c.json(report);
 });
 
 superadmin.post('/team', async (c) => {

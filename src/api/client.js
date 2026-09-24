@@ -209,6 +209,7 @@ export const superAdminApi = {
   updatePlatformSettings: (data) => request('/api/superadmin/platform-settings', { method: 'PUT', body: data }),
   team: () => request('/api/superadmin/team'),
   founders: () => request('/api/superadmin/founders'),
+  checkoutDiagnostics: () => request('/api/superadmin/checkout/diagnostics'),
   addTeamMember: (email, role) => request('/api/superadmin/team', { method: 'POST', body: { email, role } }),
   removeTeamMember: (email) => request(`/api/superadmin/team/${encodeURIComponent(email)}`, { method: 'DELETE' }),
 };

@@ -1,8 +1,56 @@
 import React from "react";
-import { DollarSign, TrendingUp, CreditCard } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { DollarSign, TrendingUp, CreditCard, CheckCircle2, XCircle } from "lucide-react";
+import { superAdminApi } from "@/api/client";
 
 const PLAN_LABELS = { starter: "Starter", pro: "Pro", premium: "Premium", family: "Family" };
 const BAR_COLORS = { starter: "#94a3b8", pro: "#0ea5a4", premium: "#00875a", family: "#005f43" };
+const PSP_LABELS = { stripe: "Stripe", paystack: "Paystack", flutterwave: "Flutterwave", payunit: "PayUnit", paddle: "Paddle" };
+
+function ChecklistDiagnostics() {
+  const { data } = useQuery({
+    queryKey: ["checkout-diagnostics"],
+    queryFn: () => superAdminApi.checkoutDiagnostics(),
+  });
+  if (!data) return null;
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <h3 className="mb-1 text-sm font-semibold">Diagnostic des moyens de paiement</h3>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Si un PSP configuré côté Cloudflare n'apparaît toujours pas comme "moyen de paiement
+        connecté" dans l'app, la variable en rouge ci-dessous indique laquelle manque ou est mal
+        nommée. Après avoir ajouté/corrigé une variable d'environnement sur Cloudflare Pages, un
+        nouveau déploiement est parfois nécessaire pour qu'elle soit prise en compte.
+      </p>
+      <div className="space-y-3">
+        {Object.entries(data).map(([provider, info]) => (
+          <div key={provider} className="rounded-lg border border-border/60 p-3">
+            <div className="mb-1.5 flex items-center gap-2 text-sm font-medium">
+              {info.configured ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <XCircle className="h-4 w-4 text-destructive" />
+              )}
+              {PSP_LABELS[provider] || provider}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(info.vars).map(([varName, present]) => (
+                <span
+                  key={varName}
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-mono-nums ${
+                    present ? "bg-emerald-100 text-emerald-800" : "bg-destructive/10 text-destructive"
+                  }`}
+                >
+                  {varName}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // Revenus & facturation : MRR, ARR, répartition par plan et paiements Stripe réels
 export default function BillingTab({ data }) {
@@ -13,6 +61,7 @@ export default function BillingTab({ data }) {
 
   return (
     <div className="space-y-5">
+      <ChecklistDiagnostics />
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center justify-between">
