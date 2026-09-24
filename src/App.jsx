@@ -30,6 +30,7 @@ import Calendrier from '@/pages/Calendrier';
 import Objectifs from '@/pages/Objectifs';
 import AnalyseMensuelle from '@/pages/AnalyseMensuelle';
 import ExportDonnees from '@/pages/ExportDonnees';
+import ImporterReleve from '@/pages/ImporterReleve';
 import RepartitionDepenses from '@/pages/RepartitionDepenses';
 import Aide from '@/pages/Aide';
 import Dettes from '@/pages/Dettes';
@@ -99,6 +100,7 @@ const AuthenticatedApp = () => {
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/profil" element={<Profil />} />
             <Route path="/export-donnees" element={<ExportDonnees />} />
+            <Route path="/importer-releve" element={<ImporterReleve />} />
             <Route path="/aide" element={<Aide />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/audit-log" element={<JournalActivite />} />
