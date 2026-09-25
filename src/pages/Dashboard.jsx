@@ -2,7 +2,8 @@ import React, { useMemo } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import { useAppShell } from "@/components/Layout";
 import { useAccounts, useTransactions, useCategories, useBudgets, useMembers } from "@/lib/useFinanceData";
-import { formatCurrency, monthKey, isSameMonth } from "@/lib/format";
+import { formatCurrency, monthKey, isSameMonth, convertAmount } from "@/lib/format";
+import CurrencyBreakdown from "@/components/dashboard/CurrencyBreakdown";
 import MetricCard from "@/components/dashboard/MetricCard";
 import ExpenseChart from "@/components/dashboard/ExpenseChart";
 import AccountBento from "@/components/dashboard/AccountBento";
@@ -12,20 +13,33 @@ import { TrendingUp, TrendingDown, Wallet } from "lucide-react";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { period, currency: householdCurrency } = useAppShell();
+  const { period, currency: householdCurrency, displayCurrency } = useAppShell();
   const { data: accounts = [] } = useAccounts(user);
   const { data: transactions = [] } = useTransactions(user);
   const { data: categories = [] } = useCategories(user);
   const { data: budgets = [] } = useBudgets(user);
   const { data: members = [] } = useMembers(user);
 
-  const currency = householdCurrency || accounts[0]?.currency || "EUR";
+  const currency = displayCurrency || householdCurrency || accounts[0]?.currency || "EUR";
+
+  // Un foyer peut avoir des comptes dans plusieurs devises (ex. un compte au
+  // Cameroun en XAF, un en France en EUR, un aux USA en USD…) : chaque
+  // montant doit être converti dans la devise d'affichage choisie avant
+  // d'être additionné, sinon le total n'a aucun sens.
+  const accountCurrency = (id) => accounts.find((a) => a.id === id)?.currency || currency;
 
   const stats = useMemo(() => {
     const inPeriod = transactions.filter((t) => t.date && t.date.slice(0, 7) === period);
-    const income = inPeriod.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
-    const expense = inPeriod.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
-    const netWorth = accounts.reduce((s, a) => s + Number(a.balance || 0), 0);
+    const income = inPeriod
+      .filter((t) => t.type === "income")
+      .reduce((s, t) => s + convertAmount(Number(t.amount), accountCurrency(t.account_id), currency), 0);
+    const expense = inPeriod
+      .filter((t) => t.type === "expense")
+      .reduce((s, t) => s + convertAmount(Number(t.amount), accountCurrency(t.account_id), currency), 0);
+    const netWorth = accounts.reduce(
+      (s, a) => s + convertAmount(Number(a.balance || 0), a.currency || currency, currency),
+      0
+    );
 
     // Variation du patrimoine sur le mois = revenus - dépenses
     const prevKey = (() => {
@@ -35,12 +49,17 @@ export default function Dashboard() {
     })();
     const prevNet = transactions
       .filter((t) => t.date && t.date.slice(0, 7) === prevKey)
-      .reduce((s, t) => s + (t.type === "income" ? Number(t.amount) : -Number(t.amount)), 0);
+      .reduce(
+        (s, t) =>
+          s +
+          (t.type === "income" ? 1 : -1) * convertAmount(Number(t.amount), accountCurrency(t.account_id), currency),
+        0
+      );
     const monthNet = income - expense;
     const changePct = prevNet !== 0 ? ((monthNet - prevNet) / Math.abs(prevNet)) * 100 : null;
 
     return { income, expense, netWorth, monthNet, changePct };
-  }, [transactions, accounts, period]);
+  }, [transactions, accounts, period, currency]);
 
   const changeLabel =
     stats.changePct === null
@@ -90,6 +109,7 @@ export default function Dashboard() {
         </div>
         <div className="space-y-5">
           <AccountBento accounts={accounts} />
+          <CurrencyBreakdown accounts={accounts} />
           <BudgetProgress
             budgets={budgets}
             categories={categories}

@@ -201,7 +201,7 @@ export default function Layout() {
     setPeriod(monthKey(d));
   };
 
-  const shellContext = { period, setPeriod, household, currency };
+  const shellContext = { period, setPeriod, household, currency, displayCurrency, setDisplayCurrency };
 
   // Fin de l'essai gratuit : un plan est requis pour continuer (les super admins ne sont jamais bloqués)
   if (isExpired && !isSuper) return <Paywall />;
