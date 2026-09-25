@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useHousehold } from "@/lib/useHousehold";
 import { useAccounts, useDebts, useGoals } from "@/lib/useFinanceData";
 import { useCurrencyEnv } from "@/lib/useCurrency";
-import { formatCurrency, convertAmount } from "@/lib/format";
+import { formatCurrency, formatCurrencyRaw, convertAmount } from "@/lib/format";
 import { Gem, Wallet, Landmark, PiggyBank, TrendingUp } from "lucide-react";
 
 const ACCOUNT_TYPE_LABELS = {
@@ -79,7 +79,7 @@ export default function GestionPatrimoine() {
                   </div>
                 </div>
                 <div className="font-mono-nums text-sm font-semibold">
-                  {formatCurrency(a.balance, a.currency || "EUR")}
+                  {formatCurrencyRaw(a.balance, a.currency || "EUR")}
                 </div>
               </div>
             ))}

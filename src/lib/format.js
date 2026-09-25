@@ -40,11 +40,19 @@ function resolveDisplay(amount, currency) {
 
 export function formatCurrency(amount, currency = "EUR") {
   const { value, currency: cur } = resolveDisplay(amount, currency);
-  const symbol = currencySymbols[cur] || cur || "€";
+  return formatCurrencyRaw(value, cur);
+}
+
+// Comme formatCurrency, mais SANS conversion vers la devise d'affichage —
+// pour tout endroit où le montant doit rester dans sa devise d'origine (ex.
+// la répartition par devise, qui n'a de sens que si chaque ligne montre son
+// propre sous-total natif, pas tout reconverti en une seule devise).
+export function formatCurrencyRaw(amount, currency = "EUR") {
+  const symbol = currencySymbols[currency] || currency || "€";
   const formatted = new Intl.NumberFormat("fr-FR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value);
+  }).format(Number(amount || 0));
   return `${formatted}\u00A0${symbol}`;
 }
 

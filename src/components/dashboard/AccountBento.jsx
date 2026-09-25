@@ -1,5 +1,5 @@
 import React from "react";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrencyRaw } from "@/lib/format";
 import { Wallet, CreditCard, Banknote, PiggyBank } from "lucide-react";
 
 const TYPE_META = {
@@ -38,7 +38,7 @@ export default function AccountBento({ accounts }) {
                 </div>
               </div>
               <div className={`font-mono-nums text-sm font-semibold ${neg ? "text-expense" : "text-foreground"}`}>
-                {formatCurrency(a.balance, a.currency)}
+                {formatCurrencyRaw(a.balance, a.currency)}
               </div>
             </div>
           );

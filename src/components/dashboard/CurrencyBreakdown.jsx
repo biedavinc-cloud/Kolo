@@ -1,5 +1,5 @@
 import React from "react";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrencyRaw } from "@/lib/format";
 import { Coins } from "lucide-react";
 
 // N'affiche rien pour un foyer mono-devise : ce résumé n'a d'intérêt que
@@ -23,7 +23,7 @@ export default function CurrencyBreakdown({ accounts }) {
         {currencies.map((c) => (
           <div key={c} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
             <span className="text-xs font-medium text-muted-foreground">{c}</span>
-            <span className="font-mono-nums text-sm font-semibold">{formatCurrency(byCurrency[c], c)}</span>
+            <span className="font-mono-nums text-sm font-semibold">{formatCurrencyRaw(byCurrency[c], c)}</span>
           </div>
         ))}
       </div>

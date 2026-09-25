@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useAccounts, useInvalidateAll } from "@/lib/useFinanceData";
 import { getHouseholdId } from "@/lib/useHousehold";
 
-import { formatCurrency } from "@/lib/format";
+import { formatCurrencyRaw } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -147,7 +147,7 @@ export default function Accounts() {
           <p className="text-sm text-muted-foreground">
             {new Set(accounts.map((a) => a.currency)).size > 1
               ? "Multi-devises : chaque compte est suivi dans sa propre devise"
-              : `Total : ${formatCurrency(total, accounts[0]?.currency || "EUR")}`}
+              : `Total : ${formatCurrencyRaw(total, accounts[0]?.currency || "EUR")}`}
           </p>
         </div>
         {!isMobile && trigger}
@@ -185,7 +185,7 @@ export default function Accounts() {
                   </div>
                 </div>
                 <div className={`mt-4 font-mono-nums text-2xl font-semibold ${neg ? "text-expense" : "text-foreground"}`}>
-                  {formatCurrency(a.balance, a.currency)}
+                  {formatCurrencyRaw(a.balance, a.currency)}
                 </div>
               </div>
             );
