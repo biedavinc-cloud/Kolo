@@ -1026,7 +1026,7 @@ superadmin.get('/checkout/diagnostics', (c) => {
     stripe: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'],
     paystack: ['PAYSTACK_SECRET_KEY'],
     flutterwave: ['FLUTTERWAVE_SECRET_KEY', 'FLUTTERWAVE_WEBHOOK_HASH'],
-    payunit: ['PAYUNIT_API_KEY', 'PAYUNIT_API_USER', 'PAYUNIT_WEBHOOK_SECRET'],
+    payunit: ['PAYUNIT_API_KEY', 'PAYUNIT_API_USER', 'PAYUNIT_API_PASSWORD', 'PAYUNIT_WEBHOOK_SECRET'],
     paddle: ['PADDLE_API_KEY', 'PADDLE_WEBHOOK_SECRET'],
   };
   const report = Object.fromEntries(

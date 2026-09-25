@@ -15,7 +15,7 @@ export default function PricingPlans({ currentPlan, onSelect, selecting }) {
             <div
               key={p.id}
               className={cn(
-                "relative flex flex-col rounded-3xl border p-7 transition-all duration-300",
+                "relative flex flex-col rounded-none border p-7 transition-all duration-300",
                 popular
                   ? "bg-[#111827] text-white border-[#111827] shadow-2xl scale-[1.02] z-10"
                   : "bg-white dark:bg-card border-gray-200 dark:border-border text-gray-900 dark:text-foreground hover:shadow-lg"

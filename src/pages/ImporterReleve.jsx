@@ -86,7 +86,15 @@ export default function ImporterReleve() {
           notes: r.notes,
         }))
       );
+      const delta = toImport.reduce((sum, r) => sum + (r.type === "income" ? Number(r.amount) : -Number(r.amount)), 0);
+      const account = accounts.find((a) => a.id === accountId);
+      if (account) {
+        await db.entities.Account.update(accountId, {
+          balance: Number((Number(account.balance || 0) + delta).toFixed(2)),
+        });
+      }
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      await queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast({ title: `${toImport.length} transaction(s) importée(s)` });
       reset();
     } catch (err) {
