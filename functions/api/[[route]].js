@@ -1195,7 +1195,10 @@ app.post('/invite', requireAuth, async (c) => {
 
 const PLAN_LABELS = Object.fromEntries(PLANS.map((p) => [p.id, p.name]));
 
-app.get('/checkout/providers', (c) => c.json({ providers: availableProviders(c.env) }));
+app.get('/checkout/providers', (c) => {
+  c.header('Cache-Control', 'no-store');
+  return c.json({ providers: availableProviders(c.env) });
+});
 
 // Diagnostic réservé aux super administrateurs — dit précisément quelle(s)
 // variable(s) manque(nt) pour chaque PSP, sans jamais exposer les valeurs.

@@ -23,10 +23,17 @@ export function useCheckoutPlan() {
     setSelecting(plan.id);
     try {
       const res = await createCheckoutSession(plan.id, providerId);
-      if (!res?.url) throw new Error("URL de paiement manquante");
+      if (!res?.url) throw new Error("URL de paiement manquante dans la réponse du serveur");
       window.location.href = res.url;
     } catch (e) {
-      toast({ title: "Paiement impossible", description: e.message, variant: "destructive" });
+      toast({ title: "Paiement impossible", description: e.message || String(e), variant: "destructive" });
+      // Si le serveur ne reconnaît plus ce fournisseur au moment du clic
+      // (alors qu'il apparaissait dans la liste il y a un instant), on
+      // rafraîchit la liste affichée pour refléter l'état réel plutôt que
+      // de laisser l'utilisateur retenter avec une option qui va re-échouer.
+      getCheckoutProviders()
+        .then((r) => setProviders(r?.providers || []))
+        .catch(() => {});
     } finally {
       setSelecting(null);
       setPendingPlan(null);
